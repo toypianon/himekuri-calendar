@@ -142,8 +142,6 @@
 const API_KEY = config.apiKey;
 const CLIENT_ID = config.clientId;
 
-        // =========================================================================
-
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
         const authorizeButton = document.getElementById('authorize_button');
@@ -223,15 +221,11 @@ const CLIENT_ID = config.clientId;
 
                 if (storedTokenString && storedTimestamp && (Date.now() - storedTimestamp < twelveHoursInMillis)) {
                     gapi.client.setToken(JSON.parse(storedTokenString));
-                    // トークンの有効性を軽量なAPIコールで確認
                     try {
                         await gapi.client.calendar.colors.get();
                         tokenCallback(gapi.client.getToken());
                     } catch (error) {
-                        // トークンが無効ならログインボタンを表示
-                        localStorage.removeItem('google_auth_token');
-                        localStorage.removeItem('google_auth_timestamp');
-                        enableAuthButton();
+                        handleAuthError('セッションの有効性を確認できませんでした。再度連携してください。');
                     }
                 } else {
                     enableAuthButton();
@@ -249,6 +243,18 @@ const CLIENT_ID = config.clientId;
             authorizeButton.querySelector('span').textContent = 'Googleカレンダーと連携';
         }
 
+        function handleAuthError(message = '認証の有効期限が切れました。再度連携してください。') {
+            stopEventUpdates();
+            gapi.client.setToken(null);
+            localStorage.removeItem('google_auth_token');
+            localStorage.removeItem('google_auth_timestamp');
+            
+            authorizeButton.parentElement.style.display = 'block';
+            controlsContainer.classList.add('hidden');
+            
+            showErrorMessage(message);
+        }
+
         authorizeButton.onclick = () => {
             if (tokenClient) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
@@ -258,17 +264,7 @@ const CLIENT_ID = config.clientId;
         signoutButton.onclick = () => {
              const token = gapi.client.getToken();
              if (token !== null) {
-                 google.accounts.oauth2.revoke(token.access_token, () => {
-                    stopEventUpdates();
-                    gapi.client.setToken(null);
-                    localStorage.removeItem('google_auth_token');
-                    localStorage.removeItem('google_auth_timestamp');
-                    authorizeButton.parentElement.style.display = 'block';
-                    controlsContainer.classList.add('hidden');
-                    eventList.innerHTML = '';
-                    noEventsMsg.textContent = 'ログアウトしました。再度連携してください。';
-                    noEventsMsg.classList.remove('hidden');
-                 });
+                 google.accounts.oauth2.revoke(token.access_token, handleAuthError.bind(null, 'ログアウトしました。'));
              }
         };
 
@@ -277,14 +273,12 @@ const CLIENT_ID = config.clientId;
                 showErrorMessage(`認証エラー: ${tokenResponse.error}`);
                 return;
              }
-             // 認証成功時にトークンとタイムスタンプを保存
-             localStorage.setItem('google_auth_token', JSON.stringify(tokenResponse));
+             localStorage.setItem('google_auth_token', JSON.stringify(gapi.client.getToken()));
              localStorage.setItem('google_auth_timestamp', Date.now());
 
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
              controlsContainer.classList.remove('hidden');
-             gapi.client.setToken(tokenResponse);
              loadSettingsAndStartUpdates();
         }
 
@@ -340,8 +334,13 @@ const CLIENT_ID = config.clientId;
                     eventList.appendChild(noEventDiv);
                 }
             } catch (err) {
-                showErrorMessage(`カレンダー予定の取得エラー: ${err.message}`);
-                stopEventUpdates();
+                if (err.status === 401) {
+                    handleAuthError();
+                } else {
+                    const errorMessage = err.result?.error?.message || JSON.stringify(err);
+                    showErrorMessage(`カレンダー予定の取得エラー: ${errorMessage}`);
+                    stopEventUpdates();
+                }
             }
         }
         
@@ -502,6 +501,6 @@ const CLIENT_ID = config.clientId;
             checkSleepMode(); 
         };
     </script>
-   
 </body>
 </html>
+
