@@ -96,17 +96,7 @@
 
             <div id="controls-container" class="hidden mt-6 space-y-4">
                 <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
-                    <div>
-                        <label for="refresh-interval" class="block text-sm font-medium text-gray-700 mb-1">自動更新（分）:</label>
-                        <select id="refresh-interval" class="w-full p-2 border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                            <option value="0">更新しない</option>
-                            <option value="5">5分ごと</option>
-                            <option value="15" selected>15分ごと</option>
-                            <option value="30">30分ごと</option>
-                            <option value="60">60分ごと</option>
-                        </select>
-                    </div>
-                    <div class="border-t pt-3">
+                    <div class="pt-3">
                         <label class="flex items-center justify-between cursor-pointer">
                             <span class="text-sm font-medium text-gray-700">おやすみモード</span>
                              <div class="relative">
@@ -151,7 +141,6 @@ const CLIENT_ID = config.clientId;
         const errorMessageContainer = document.getElementById('error-message-container');
         const errorMessageText = document.getElementById('error-message-text');
         const controlsContainer = document.getElementById('controls-container');
-        const refreshIntervalSelect = document.getElementById('refresh-interval');
         const appHeader = document.getElementById('app-header');
 
         // おやすみモード関連
@@ -167,6 +156,7 @@ const CLIENT_ID = config.clientId;
         let google;
         let tokenClient;
         let eventUpdateIntervalId = null;
+        let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
 
         function showErrorMessage(message) {
@@ -214,12 +204,9 @@ const CLIENT_ID = config.clientId;
                     callback: tokenCallback,
                 });
                 
-                // ★★★ 根本的な修正箇所 ★★★
-                // 以前に連携許可されていれば、サイレントでトークンを要求します。
-                // これにより、ユーザーは再訪問時にボタンを押す必要がなくなります。
                 tokenClient.requestAccessToken({prompt: 'none'});
                 
-                enableAuthButton(); // 初回訪問時、またはサイレント認証失敗時に備え、ボタンは表示しておく
+                enableAuthButton();
 
             } catch (err) {
                  showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
@@ -245,7 +232,6 @@ const CLIENT_ID = config.clientId;
 
         authorizeButton.onclick = () => {
             if (tokenClient) {
-                // ユーザー操作による連携時は同意画面を強制表示
                 tokenClient.requestAccessToken({prompt: 'consent'});
             }
         };
@@ -262,13 +248,12 @@ const CLIENT_ID = config.clientId;
         function tokenCallback(tokenResponse) {
              if (tokenResponse.error) {
                 console.log('サイレント認証に失敗、またはポップアップが閉じられました:', tokenResponse.error);
-                // サイレント認証失敗時は、ユーザーがボタンを押すのを待つため、ここでは何もしない。
                 return;
              }
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
              controlsContainer.classList.remove('hidden');
-             loadSettingsAndStartUpdates();
+             startAutomaticUpdates();
         }
 
         async function listUpcomingEvents() {
@@ -372,33 +357,26 @@ const CLIENT_ID = config.clientId;
                 headerTitle.classList.add('text-white');
             }
         }
-
-        refreshIntervalSelect.onchange = () => {
-            const newInterval = parseInt(refreshIntervalSelect.value, 10);
-            localStorage.setItem('refreshInterval', newInterval);
-            startEventUpdates(newInterval);
-        };
         
-        function loadSettingsAndStartUpdates() {
-            const savedInterval = localStorage.getItem('refreshInterval') || '15'; 
-            if (refreshIntervalSelect) {
-                refreshIntervalSelect.value = savedInterval;
-            }
-            listUpcomingEvents();
-            startEventUpdates(parseInt(savedInterval, 10));
-        }
+        function startAutomaticUpdates() {
+            listUpcomingEvents(); // まず一度実行
+            stopEventUpdates(); // 既存のタイマーをクリア
 
-        function startEventUpdates(intervalMinutes) {
-            stopEventUpdates();
-            if (intervalMinutes > 0) {
-                eventUpdateIntervalId = setInterval(listUpcomingEvents, intervalMinutes * 60 * 1000);
-            }
+            // 5分ごとに予定を更新
+            eventUpdateIntervalId = setInterval(listUpcomingEvents, 5 * 60 * 1000);
+            
+            // 50分後にページ全体をリロード
+            pageReloadTimeoutId = setTimeout(() => location.reload(), 50 * 60 * 1000);
         }
 
         function stopEventUpdates() {
             if (eventUpdateIntervalId) {
                 clearInterval(eventUpdateIntervalId);
                 eventUpdateIntervalId = null;
+            }
+            if (pageReloadTimeoutId) {
+                clearTimeout(pageReloadTimeoutId);
+                pageReloadTimeoutId = null;
             }
         }
 
