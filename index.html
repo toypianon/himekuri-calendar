@@ -143,6 +143,7 @@ const API_KEY = config.apiKey;
 const CLIENT_ID = config.clientId;
 
 
+
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
         const authorizeButton = document.getElementById('authorize_button');
@@ -215,18 +216,10 @@ const CLIENT_ID = config.clientId;
                     callback: tokenCallback,
                 });
                 
-                const storedTokenString = localStorage.getItem('google_auth_token');
-                if (storedTokenString) {
-                    try {
-                        gapi.client.setToken(JSON.parse(storedTokenString));
-                        await gapi.client.calendar.colors.get();
-                        tokenCallback(gapi.client.getToken());
-                    } catch (error) {
-                        handleAuthError('セッションの有効期限が切れていました。再度連携してください。');
-                    }
-                } else {
-                    enableAuthButton();
-                }
+                // 以前に連携許可されていれば、サイレントでトークンを要求
+                tokenClient.requestAccessToken({prompt: 'none'});
+                
+                enableAuthButton(); // すぐにボタンを有効化
 
             } catch (err) {
                  showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
@@ -243,7 +236,6 @@ const CLIENT_ID = config.clientId;
         function handleAuthError(message = '認証の有効期限が切れました。再度連携してください。') {
             stopEventUpdates();
             if(gapi) gapi.client.setToken(null);
-            localStorage.removeItem('google_auth_token');
             
             authorizeButton.parentElement.style.display = 'block';
             controlsContainer.classList.add('hidden');
@@ -253,8 +245,7 @@ const CLIENT_ID = config.clientId;
 
         authorizeButton.onclick = () => {
             if (tokenClient) {
-                // prompt: 'consent' を削除し、自動で再認証するようにする
-                tokenClient.requestAccessToken({});
+                tokenClient.requestAccessToken({prompt: 'consent'});
             }
         };
         
@@ -269,11 +260,10 @@ const CLIENT_ID = config.clientId;
 
         function tokenCallback(tokenResponse) {
              if (tokenResponse.error) {
-                showErrorMessage(`認証エラー: ${tokenResponse.error}`);
+                 // ユーザーがポップアップを閉じた場合など。UIは操作しない。
+                console.log('Token acquisition was not successful:', tokenResponse.error);
                 return;
              }
-             localStorage.setItem('google_auth_token', JSON.stringify(gapi.client.getToken()));
-
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
              controlsContainer.classList.remove('hidden');
