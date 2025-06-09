@@ -214,18 +214,14 @@ const CLIENT_ID = config.clientId;
                     callback: tokenCallback,
                 });
                 
-                // 自動連携処理
                 const storedTokenString = localStorage.getItem('google_auth_token');
-                const storedTimestamp = localStorage.getItem('google_auth_timestamp');
-                const twelveHoursInMillis = 12 * 60 * 60 * 1000;
-
-                if (storedTokenString && storedTimestamp && (Date.now() - storedTimestamp < twelveHoursInMillis)) {
+                if (storedTokenString) {
                     gapi.client.setToken(JSON.parse(storedTokenString));
                     try {
                         await gapi.client.calendar.colors.get();
                         tokenCallback(gapi.client.getToken());
                     } catch (error) {
-                        handleAuthError('セッションの有効性を確認できませんでした。再度連携してください。');
+                        handleAuthError('セッションの有効期限が切れました。再度連携してください。');
                     }
                 } else {
                     enableAuthButton();
@@ -247,7 +243,6 @@ const CLIENT_ID = config.clientId;
             stopEventUpdates();
             gapi.client.setToken(null);
             localStorage.removeItem('google_auth_token');
-            localStorage.removeItem('google_auth_timestamp');
             
             authorizeButton.parentElement.style.display = 'block';
             controlsContainer.classList.add('hidden');
@@ -264,7 +259,9 @@ const CLIENT_ID = config.clientId;
         signoutButton.onclick = () => {
              const token = gapi.client.getToken();
              if (token !== null) {
-                 google.accounts.oauth2.revoke(token.access_token, handleAuthError.bind(null, 'ログアウトしました。'));
+                 google.accounts.oauth2.revoke(token.access_token, () => handleAuthError('ログアウトしました。'));
+             } else {
+                 handleAuthError('ログアウトしました。');
              }
         };
 
@@ -274,7 +271,6 @@ const CLIENT_ID = config.clientId;
                 return;
              }
              localStorage.setItem('google_auth_token', JSON.stringify(gapi.client.getToken()));
-             localStorage.setItem('google_auth_timestamp', Date.now());
 
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
@@ -503,4 +499,3 @@ const CLIENT_ID = config.clientId;
     </script>
 </body>
 </html>
-
