@@ -142,8 +142,6 @@
 const API_KEY = config.apiKey;
 const CLIENT_ID = config.clientId;
 
-
-
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
         const authorizeButton = document.getElementById('authorize_button');
@@ -216,10 +214,12 @@ const CLIENT_ID = config.clientId;
                     callback: tokenCallback,
                 });
                 
-                // 以前に連携許可されていれば、サイレントでトークンを要求
+                // ★★★ 根本的な修正箇所 ★★★
+                // 以前に連携許可されていれば、サイレントでトークンを要求します。
+                // これにより、ユーザーは再訪問時にボタンを押す必要がなくなります。
                 tokenClient.requestAccessToken({prompt: 'none'});
                 
-                enableAuthButton(); // すぐにボタンを有効化
+                enableAuthButton(); // 初回訪問時、またはサイレント認証失敗時に備え、ボタンは表示しておく
 
             } catch (err) {
                  showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
@@ -245,6 +245,7 @@ const CLIENT_ID = config.clientId;
 
         authorizeButton.onclick = () => {
             if (tokenClient) {
+                // ユーザー操作による連携時は同意画面を強制表示
                 tokenClient.requestAccessToken({prompt: 'consent'});
             }
         };
@@ -260,8 +261,8 @@ const CLIENT_ID = config.clientId;
 
         function tokenCallback(tokenResponse) {
              if (tokenResponse.error) {
-                 // ユーザーがポップアップを閉じた場合など。UIは操作しない。
-                console.log('Token acquisition was not successful:', tokenResponse.error);
+                console.log('サイレント認証に失敗、またはポップアップが閉じられました:', tokenResponse.error);
+                // サイレント認証失敗時は、ユーザーがボタンを押すのを待つため、ここでは何もしない。
                 return;
              }
              errorMessageContainer.classList.add('hidden');
@@ -273,6 +274,7 @@ const CLIENT_ID = config.clientId;
         async function listUpcomingEvents() {
             if (!gapi.client.getToken()) {
                 stopEventUpdates();
+                handleAuthError("セッションが切れました。再度連携してください。");
                 return;
             }
             try {
