@@ -88,7 +88,7 @@
             </div>
 
             <div id="events-container" class="mt-6">
-                <h2 class="text-lg font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
+                <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
                 <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
                      <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
                 </div>
@@ -283,15 +283,15 @@ const CLIENT_ID = config.clientId;
                         eventDiv.className = 'bg-amber-100 p-4 rounded-lg shadow-sm';
                         
                         let timeString = (event.start.dateTime)
-                            ? new Date(start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                            ? new Date(start).toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit', hour12: true })
                             : "終日";
 
                         const pTime = document.createElement('p');
-                        pTime.className = 'text-2xl font-bold text-gray-800';
+                        pTime.className = 'text-3xl font-bold text-gray-800';
                         pTime.textContent = timeString;
 
                         const pSummary = document.createElement('p');
-                        pSummary.className = 'text-2xl text-gray-900 mt-1';
+                        pSummary.className = 'text-3xl text-gray-900 mt-1';
                         pSummary.textContent = event.summary;
 
                         eventDiv.appendChild(pTime);
