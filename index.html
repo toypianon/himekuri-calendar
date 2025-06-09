@@ -2,190 +2,506 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <title>日めくりカレンダー</title>
-    
+    <title>Googleカレンダー連携 日めくりカレンダー (完成版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .font-roboto-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .calendar-tear {
+            position: relative;
+            background: white;
+        }
+        .calendar-tear::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            right: 0;
+            height: 20px;
+            background-image: linear-gradient(45deg, transparent 75%, white 75%), linear-gradient(-45deg, transparent 75%, white 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 0;
+        }
+        #event-list::-webkit-scrollbar { width: 8px; }
+        #event-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        #event-list::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        #event-list::-webkit-scrollbar-thumb:hover { background: #555; }
+        /* おやすみモード用のオーバーレイ */
+        #sleep-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            pointer-events: none; /* 下の要素をクリックできるようにする */
+        }
+        /* トグルスイッチのスタイル */
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4ade80; /* green-400 */
+        }
+        .toggle-checkbox:checked + .toggle-label .dot {
+            transform: translateX(1.5rem);
+        }
+    </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <!-- おやすみモード用のオーバーレイ -->
+    <div id="sleep-overlay" class="hidden"></div>
 
-    <div class="text-center p-4">
-        <h1 id="date-display" class="text-4xl md:text-6xl font-bold text-gray-800"></h1>
-        <p id="day-of-week-display" class="text-xl md:text-2xl text-gray-600"></p>
-
-        <div class="mt-8">
-            <button id="authorize_button" style="display: none;" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                Googleアカウントと連携
-            </button>
-            <button id="signout_button" style="display: none;" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                ログアウト
-            </button>
+    <div class="w-full max-w-xl mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden">
+        <div id="app-header" class="p-4 text-center transition-colors duration-500">
+            <h1 class="text-xl font-bold">日めくりカレンダー</h1>
+        </div>
+        
+        <div id="error-message-container" class="hidden p-4 m-4 bg-red-100 border-l-4 border-red-500 text-red-700">
+             <p class="font-bold">エラー</p>
+             <p id="error-message-text"></p>
         </div>
 
-        <div id="content" class="mt-4 text-left"></div>
+        <div class="p-6 pt-2">
+            <div class="calendar-tear shadow-lg rounded-lg p-3 border-2 border-gray-200 mb-4">
+                <div class="text-center">
+                    <p id="year" class="text-gray-500 text-lg"></p>
+                    <div class="flex items-baseline justify-center space-x-2">
+                        <p id="month-date" class="font-roboto-mono text-5xl font-bold text-gray-800"></p>
+                        <p id="day-of-week" class="font-roboto-mono text-5xl font-bold text-red-500"></p>
+                    </div>
+                    <p id="current-time" class="font-roboto-mono text-2xl text-gray-600 mt-1"></p>
+                </div>
+            </div>
+
+            <div id="auth-container">
+                <button id="authorize_button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center space-x-2 opacity-50 cursor-not-allowed" disabled>
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.805 10.041C21.911 10.681 21.96 11.341 21.96 12C21.96 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C15.42 2 18.356 3.733 20.063 6.205L16.494 9.773H12V14.227H17.495C17.248 15.733 16.331 16.994 15.006 17.844C14.07 18.452 12.885 18.773 12 18.773C9.295 18.773 7.027 16.821 6.373 14.331H2.628C3.39 18.494 7.299 21.545 12 21.545C14.735 21.545 17.152 20.669 18.91 19.163C20.978 17.404 21.805 14.863 21.805 12.432V10.041Z" fill="#FFFFFF"/></svg>
+                    <span>準備中...</span>
+                </button>
+            </div>
+
+            <div id="events-container" class="mt-6">
+                <h2 class="text-lg font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
+                <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                     <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
+                </div>
+            </div>
+
+            <div id="controls-container" class="hidden mt-6 space-y-4">
+                <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
+                    <div>
+                        <label for="refresh-interval" class="block text-sm font-medium text-gray-700 mb-1">自動更新（分）:</label>
+                        <select id="refresh-interval" class="w-full p-2 border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                            <option value="0">更新しない</option>
+                            <option value="5">5分ごと</option>
+                            <option value="15" selected>15分ごと</option>
+                            <option value="30">30分ごと</option>
+                            <option value="60">60分ごと</option>
+                        </select>
+                    </div>
+                    <div class="border-t pt-3">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="text-sm font-medium text-gray-700">おやすみモード</span>
+                             <div class="relative">
+                                <input type="checkbox" id="sleep-mode-toggle" class="sr-only toggle-checkbox">
+                                <div class="block bg-gray-200 w-14 h-8 rounded-full toggle-label">
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow transition-transform"></div>
+                                </div>
+                            </div>
+                        </label>
+                        <div id="sleep-time-settings" class="mt-2 space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-start-time" class="text-sm text-gray-600">開始:</label>
+                                <input type="time" id="sleep-start-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-end-time" class="text-sm text-gray-600">終了:</label>
+                                <input type="time" id="sleep-end-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <p id="sleep-mode-status" class="text-xs text-gray-500 mt-2 h-4"></p>
+                        </div>
+                    </div>
+                </div>
+                <button id="signout_button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログアウト</button>
+            </div>
+        </div>
     </div>
-
-    <script src="config.js"></script>
     
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-
+    <script src="config.js"></script>
     <script>
-// ===== 完成版JavaScriptコード ここから =====
+        // =========================================================================
+        // STEP 1: ご自身のAPIキーとクライアントIDをここに設定してください
+        // =========================================================================
+const API_KEY = config.apiKey;
+const CLIENT_ID = config.clientId;
 
-// --- グローバル変数定義 ---
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
+        // =========================================================================
 
-const authorizeButton = document.getElementById('authorize_button');
-const signoutButton = document.getElementById('signout_button');
-const contentDiv = document.getElementById('content');
-const dateDisplay = document.getElementById('date-display');
-const dayOfWeekDisplay = document.getElementById('day-of-week-display');
+        const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
-// --- 日付と時刻の表示 ---
-function updateDateTime() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const date = now.getDate();
-    const dayIndex = now.getDay();
-    const days = ["日", "月", "火", "水", "木", "金", "土"];
+        const authorizeButton = document.getElementById('authorize_button');
+        const signoutButton = document.getElementById('signout_button');
+        const eventList = document.getElementById('event-list');
+        const noEventsMsg = document.getElementById('no-events-msg');
+        const errorMessageContainer = document.getElementById('error-message-container');
+        const errorMessageText = document.getElementById('error-message-text');
+        const controlsContainer = document.getElementById('controls-container');
+        const refreshIntervalSelect = document.getElementById('refresh-interval');
+        const appHeader = document.getElementById('app-header');
 
-    dateDisplay.textContent = `${year}年 ${month}月${date}日`;
-    dayOfWeekDisplay.textContent = `(${days[dayIndex]})`;
-}
+        // おやすみモード関連
+        const sleepOverlay = document.getElementById('sleep-overlay');
+        const sleepModeToggle = document.getElementById('sleep-mode-toggle');
+        const sleepTimeSettings = document.getElementById('sleep-time-settings');
+        const sleepStartTimeInput = document.getElementById('sleep-start-time');
+        const sleepEndTimeInput = document.getElementById('sleep-end-time');
+        const sleepModeStatus = document.getElementById('sleep-mode-status');
 
-// --- Google API 関連 ---
 
-// gapi.clientライブラリの読み込み完了時に呼ばれる
-function gapiLoaded() {
-    gapi.load('client', initializeGapiClient);
-}
+        let gapi;
+        let google;
+        let tokenClient;
+        let eventUpdateIntervalId = null;
+        let lastCheckedDate = new Date().getDate();
 
-// gapi.clientの初期化
-async function initializeGapiClient() {
-    try {
-        await gapi.client.init({
-            apiKey: config.apiKey,
-            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-        });
-        gapiInited = true;
-        maybeEnableButtons();
-    } catch (err) {
-        contentDiv.innerText = `エラー: gapi.clientの初期化に失敗しました。 ${err.message}`;
-    }
-}
-
-// Google認証ライブラリの読み込み完了時に呼ばれる
-function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: config.clientId,
-        scope: "https://www.googleapis.com/auth/calendar.readonly",
-        callback: tokenCallback,
-    });
-    gisInited = true;
-    maybeEnableButtons();
-}
-
-// 認証ボタンを有効化する
-function maybeEnableButtons() {
-    if (gapiInited && gisInited) {
-        authorizeButton.style.display = 'block';
-    }
-}
-
-// 認証ボタンのクリックイベント
-authorizeButton.onclick = function handleAuthClick() {
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-};
-
-// ログアウトボタンのクリックイベント
-signoutButton.onclick = function handleSignoutClick() {
-    const token = gapi.client.getToken();
-    if (token !== null) {
-        google.accounts.oauth2.revoke(token.access_token, () => {
-            gapi.client.setToken(null);
-            contentDiv.innerHTML = '';
-            authorizeButton.style.display = 'block';
-            signoutButton.style.display = 'none';
-        });
-    }
-};
-
-// 認証後のコールバック関数
-function tokenCallback(tokenResponse) {
-    if (tokenResponse && tokenResponse.access_token) {
-        gapi.client.setToken(tokenResponse);
-        authorizeButton.style.display = 'none';
-        signoutButton.style.display = 'block';
-        listUpcomingEvents();
-    } else if (tokenResponse.error) {
-        contentDiv.innerText = `エラー: 認証に失敗しました。 ${tokenResponse.error}`;
-    }
-}
-
-// 今日の予定を取得して表示する
-async function listUpcomingEvents() {
-    let response;
-    try {
-        const now = new Date();
-        const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
-        const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-        
-        response = await gapi.client.calendar.events.list({
-            'calendarId': 'primary',
-            'timeMin': timeMin,
-            'timeMax': timeMax,
-            'showDeleted': false,
-            'singleEvents': true,
-            'orderBy': 'startTime',
-        });
-    } catch (err) {
-        contentDiv.innerText = `エラー: APIリクエストに失敗しました。 ${err.message}`;
-        return;
-    }
-
-    const events = response.result.items;
-    if (!events || events.length == 0) {
-        contentDiv.innerText = '今日の予定はありません。';
-        return;
-    }
-
-    // 古い予定をクリア
-    contentDiv.innerHTML = '';
-
-    // 新しい予定をリスト表示
-    events.forEach(event => {
-        let when;
-        if (event.start.dateTime) {
-            when = new Date(event.start.dateTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-        } else {
-            when = '終日';
+        function showErrorMessage(message) {
+            errorMessageText.innerText = message;
+            errorMessageContainer.classList.remove('hidden');
         }
-        const eventElement = document.createElement('p');
-        eventElement.textContent = `${when} - ${event.summary}`;
-        contentDiv.appendChild(eventElement);
-    });
-}
 
-// --- 初期化処理 ---
+        // --- ライブラリ読み込みと初期化処理 ---
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.defer = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        async function initializeApis() {
+            try {
+                await Promise.all([
+                    loadScript('https://apis.google.com/js/api.js'),
+                    loadScript('https://accounts.google.com/gsi/client')
+                ]);
+                
+                await new Promise(resolve => setTimeout(resolve, 500)); 
 
-// 日付と時刻を最初に表示し、1秒ごとに時刻を更新
-updateDateTime();
-setInterval(updateDateTime, 1000);
+                gapi = window.gapi;
+                google = window.google;
 
-// GoogleのAPIライブラリを読み込むためのコールバック関数をグローバルに設定
-// HTMLの<script src="https://apis.google.com/js/api.js?onload=gapiLoaded">で呼ばれます
-window.gapiLoaded = gapiLoaded;
-// HTMLの<script src="https://accounts.google.com/gsi/client?onload=gisLoaded">で呼ばれます
-window.gisLoaded = gisLoaded;
+                await new Promise((resolve, reject) => gapi.load('client', resolve));
+                
+                if (API_KEY === 'YOUR_API_KEY') throw new Error('APIキーが設定されていません。');
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+                });
 
-// ===== 完成版JavaScriptコード ここまで =====
+                if (CLIENT_ID === 'YOUR_CLIENT_ID') throw new Error('クライアントIDが設定されていません。');
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: tokenCallback,
+                });
+                
+                // 自動連携処理
+                const storedTokenString = localStorage.getItem('google_auth_token');
+                const storedTimestamp = localStorage.getItem('google_auth_timestamp');
+                const twelveHoursInMillis = 12 * 60 * 60 * 1000;
+
+                if (storedTokenString && storedTimestamp && (Date.now() - storedTimestamp < twelveHoursInMillis)) {
+                    gapi.client.setToken(JSON.parse(storedTokenString));
+                    // トークンの有効性を軽量なAPIコールで確認
+                    try {
+                        await gapi.client.calendar.colors.get();
+                        tokenCallback(gapi.client.getToken());
+                    } catch (error) {
+                        // トークンが無効ならログインボタンを表示
+                        localStorage.removeItem('google_auth_token');
+                        localStorage.removeItem('google_auth_timestamp');
+                        enableAuthButton();
+                    }
+                } else {
+                    enableAuthButton();
+                }
+
+            } catch (err) {
+                 showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
+                 enableAuthButton();
+            }
+        }
+        
+        function enableAuthButton() {
+            authorizeButton.disabled = false;
+            authorizeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            authorizeButton.querySelector('span').textContent = 'Googleカレンダーと連携';
+        }
+
+        authorizeButton.onclick = () => {
+            if (tokenClient) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            }
+        };
+        
+        signoutButton.onclick = () => {
+             const token = gapi.client.getToken();
+             if (token !== null) {
+                 google.accounts.oauth2.revoke(token.access_token, () => {
+                    stopEventUpdates();
+                    gapi.client.setToken(null);
+                    localStorage.removeItem('google_auth_token');
+                    localStorage.removeItem('google_auth_timestamp');
+                    authorizeButton.parentElement.style.display = 'block';
+                    controlsContainer.classList.add('hidden');
+                    eventList.innerHTML = '';
+                    noEventsMsg.textContent = 'ログアウトしました。再度連携してください。';
+                    noEventsMsg.classList.remove('hidden');
+                 });
+             }
+        };
+
+        function tokenCallback(tokenResponse) {
+             if (tokenResponse.error) {
+                showErrorMessage(`認証エラー: ${tokenResponse.error}`);
+                return;
+             }
+             // 認証成功時にトークンとタイムスタンプを保存
+             localStorage.setItem('google_auth_token', JSON.stringify(tokenResponse));
+             localStorage.setItem('google_auth_timestamp', Date.now());
+
+             errorMessageContainer.classList.add('hidden');
+             authorizeButton.parentElement.style.display = 'none';
+             controlsContainer.classList.remove('hidden');
+             gapi.client.setToken(tokenResponse);
+             loadSettingsAndStartUpdates();
+        }
+
+        async function listUpcomingEvents() {
+            if (!gapi.client.getToken()) {
+                stopEventUpdates();
+                return;
+            }
+            try {
+                const now = new Date();
+                const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+                const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+                
+                const response = await gapi.client.calendar.events.list({
+                    'calendarId': 'primary', 'timeMin': timeMin, 'timeMax': timeMax,
+                    'showDeleted': false, 'singleEvents': true, 'orderBy': 'startTime'
+                });
+
+                const events = response.result.items;
+                eventList.innerHTML = ''; 
+
+                if (events.length > 0) {
+                    noEventsMsg.classList.add('hidden');
+                    events.forEach(event => {
+                        const start = event.start.dateTime || event.start.date;
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'bg-amber-100 p-4 rounded-lg shadow-sm';
+                        
+                        let timeString = (event.start.dateTime)
+                            ? new Date(start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                            : "終日";
+
+                        const pTime = document.createElement('p');
+                        pTime.className = 'text-2xl font-bold text-gray-800';
+                        pTime.textContent = timeString;
+
+                        const pSummary = document.createElement('p');
+                        pSummary.className = 'text-2xl text-gray-900 mt-1';
+                        pSummary.textContent = event.summary;
+
+                        eventDiv.appendChild(pTime);
+                        eventDiv.appendChild(pSummary);
+                        eventList.appendChild(eventDiv);
+                    });
+                } else {
+                    noEventsMsg.classList.add('hidden');
+                    const noEventDiv = document.createElement('div');
+                    noEventDiv.className = 'bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg';
+                    const pMessage = document.createElement('p');
+                    pMessage.className = 'text-2xl font-bold text-blue-800 text-center';
+                    pMessage.textContent = '今日は予定はありませんのでゆっくり過ごしてくださいね';
+                    noEventDiv.appendChild(pMessage);
+                    eventList.appendChild(noEventDiv);
+                }
+            } catch (err) {
+                showErrorMessage(`カレンダー予定の取得エラー: ${err.message}`);
+                stopEventUpdates();
+            }
+        }
+        
+        function setupDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const dayIndex = now.getDay();
+            const days = ["日", "月", "火", "水", "木", "金", "土"];
+
+            document.getElementById('year').textContent = `${year}年`;
+            document.getElementById('month-date').textContent = `${month}月${date}日`;
+            document.getElementById('day-of-week').textContent = `(${days[dayIndex]})`;
+            lastCheckedDate = date;
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ja-JP', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+            });
+            document.getElementById('current-time').textContent = timeString;
+            
+            const currentHour = now.getHours();
+            const headerTitle = appHeader.querySelector('h1');
+
+            if (currentHour >= 5 && currentHour < 17) {
+                appHeader.classList.remove('bg-purple-600');
+                appHeader.classList.add('bg-yellow-400');
+                headerTitle.classList.remove('text-white');
+                headerTitle.classList.add('text-gray-800');
+            } else {
+                appHeader.classList.remove('bg-yellow-400');
+                appHeader.classList.add('bg-purple-600');
+                headerTitle.classList.remove('text-gray-800');
+                headerTitle.classList.add('text-white');
+            }
+        }
+
+        refreshIntervalSelect.onchange = () => {
+            const newInterval = parseInt(refreshIntervalSelect.value, 10);
+            localStorage.setItem('refreshInterval', newInterval);
+            startEventUpdates(newInterval);
+        };
+        
+        function loadSettingsAndStartUpdates() {
+            const savedInterval = localStorage.getItem('refreshInterval') || '15'; 
+            if (refreshIntervalSelect) {
+                refreshIntervalSelect.value = savedInterval;
+            }
+            listUpcomingEvents();
+            startEventUpdates(parseInt(savedInterval, 10));
+        }
+
+        function startEventUpdates(intervalMinutes) {
+            stopEventUpdates();
+            if (intervalMinutes > 0) {
+                eventUpdateIntervalId = setInterval(listUpcomingEvents, intervalMinutes * 60 * 1000);
+            }
+        }
+
+        function stopEventUpdates() {
+            if (eventUpdateIntervalId) {
+                clearInterval(eventUpdateIntervalId);
+                eventUpdateIntervalId = null;
+            }
+        }
+
+        // --- おやすみモードのロジック ---
+        function saveSleepModeSettings() {
+            const settings = {
+                enabled: sleepModeToggle.checked,
+                start: sleepStartTimeInput.value,
+                end: sleepEndTimeInput.value,
+            };
+            localStorage.setItem('sleepModeSettings', JSON.stringify(settings));
+            checkSleepMode();
+        }
+
+        function loadSleepModeSettings() {
+            const savedSettings = JSON.parse(localStorage.getItem('sleepModeSettings'));
+            if (savedSettings) {
+                sleepModeToggle.checked = savedSettings.enabled;
+                sleepStartTimeInput.value = savedSettings.start || '22:00';
+                sleepEndTimeInput.value = savedSettings.end || '06:00';
+            } else {
+                sleepStartTimeInput.value = '22:00';
+                sleepEndTimeInput.value = '06:00';
+            }
+        }
+
+        function checkSleepMode() {
+            const settings = JSON.parse(localStorage.getItem('sleepModeSettings'));
+            if (!settings || !settings.enabled) {
+                sleepOverlay.classList.add('hidden');
+                sleepModeStatus.textContent = 'おやすみモードはオフです。';
+                return;
+            }
+
+            const now = new Date();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            
+            const [startHour, startMinute] = settings.start.split(':').map(Number);
+            const startTime = startHour * 60 + startMinute;
+
+            const [endHour, endMinute] = settings.end.split(':').map(Number);
+            const endTime = endHour * 60 + endMinute;
+
+            let isSleepTime = false;
+            if (startTime > endTime) { 
+                if (currentTime >= startTime || currentTime < endTime) {
+                    isSleepTime = true;
+                }
+            } else {
+                if (currentTime >= startTime && currentTime < endTime) {
+                    isSleepTime = true;
+                }
+            }
+
+            if (isSleepTime) {
+                sleepOverlay.classList.remove('hidden');
+                sleepModeStatus.textContent = `おやすみモード中です（終了: ${settings.end}）。`;
+            } else {
+                sleepOverlay.classList.add('hidden');
+                sleepModeStatus.textContent = `通常モードです（開始: ${settings.start}）。`;
+            }
+        }
+        
+        sleepModeToggle.onchange = saveSleepModeSettings;
+        sleepStartTimeInput.onchange = saveSleepModeSettings;
+        sleepEndTimeInput.onchange = saveSleepModeSettings;
+
+
+        function startSystemChecks() {
+            setInterval(() => {
+                const currentDate = new Date().getDate();
+                if (currentDate !== lastCheckedDate) {
+                    setupDate();
+                    if (gapi && gapi.client.getToken()) {
+                        listUpcomingEvents();
+                    }
+                }
+                checkSleepMode();
+            }, 60000); 
+        }
+
+        // --- 初期化処理 ---
+        window.onload = () => {
+            setupDate();
+            updateTime();
+            setInterval(updateTime, 1000);
+            startSystemChecks();
+            initializeApis();
+            loadSleepModeSettings();
+            checkSleepMode(); 
+        };
     </script>
-
+   
 </body>
 </html>
