@@ -142,6 +142,7 @@
 const API_KEY = config.apiKey;
 const CLIENT_ID = config.clientId;
 
+
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
         const authorizeButton = document.getElementById('authorize_button');
@@ -252,7 +253,8 @@ const CLIENT_ID = config.clientId;
 
         authorizeButton.onclick = () => {
             if (tokenClient) {
-                tokenClient.requestAccessToken({prompt: 'consent'});
+                // prompt: 'consent' を削除し、自動で再認証するようにする
+                tokenClient.requestAccessToken({});
             }
         };
         
