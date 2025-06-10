@@ -494,31 +494,23 @@ const CLIENT_ID = config.clientId;
             }, 60000); 
         }
 
-        // --- ★★★ 根本的な修正箇所 ★★★ ---
-        // 2つのライブラリの読み込み完了をコールバックで確実に待ってから初期化を実行する
-        let gapiLoaded = false;
-        let gisLoaded = false;
-        
-        function onGapiScriptLoad() {
-            gapiLoaded = true;
-            if (gisLoaded) {
-                initializeApis();
-            }
-        }
-        
-        function onGisScriptLoad() {
-            gisLoaded = true;
-            if (gapiLoaded) {
-                initializeApis();
-            }
-        }
-
         // --- 初期化処理 ---
         window.onload = () => {
             setupDate();
             updateTime();
             setInterval(updateTime, 1000);
             startSystemChecks();
+            
+            // ★★★ 根本的な修正箇所 ★★★
+            // Google APIライブラリの準備を確実に監視する
+            const readyCheckInterval = setInterval(() => {
+                // gapi.client と google.accounts の両方が利用可能かチェック
+                if (window.gapi && window.gapi.client && window.google && window.google.accounts) {
+                    clearInterval(readyCheckInterval); // 両方準備できたら監視を停止
+                    initializeApis(); // 初期化処理を開始
+                }
+            }, 100); // 100ミリ秒ごとに確認
+
             loadSleepModeSettings();
             checkSleepMode(); 
         };
