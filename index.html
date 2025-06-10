@@ -166,9 +166,6 @@
         </div>
     </div>
     
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiScriptLoadedCallback()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisScriptLoadedCallback()"></script>
-
     <script src="config.js"></script>
     <script>
         // =========================================================================
@@ -176,6 +173,7 @@
         // =========================================================================
 const API_KEY = config.apiKey;
 const CLIENT_ID = config.clientId;
+
 
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
@@ -214,29 +212,9 @@ const CLIENT_ID = config.clientId;
         let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
         
-        let gapiScriptLoaded = false;
-        let gisScriptLoaded = false;
-
         function showErrorMessage(message) {
             errorMessageText.innerText = message;
             errorMessageContainer.classList.remove('hidden');
-        }
-
-        function tryInitializeApis() {
-            if (!gapiScriptLoaded || !gisScriptLoaded) {
-                return; 
-            }
-            initializeApis();
-        }
-
-        function gapiScriptLoadedCallback() {
-            gapiScriptLoaded = true;
-            tryInitializeApis();
-        }
-
-        function gisScriptLoadedCallback() {
-            gisScriptLoaded = true;
-            tryInitializeApis();
         }
 
         async function initializeApis() {
@@ -512,6 +490,25 @@ const CLIENT_ID = config.clientId;
                 }
                 checkSleepMode();
             }, 60000); 
+        }
+
+        // --- ★★★ 根本的な修正箇所 ★★★ ---
+        // 2つのライブラリの読み込み完了をコールバックで確実に待ってから初期化を実行する
+        let gapiLoaded = false;
+        let gisLoaded = false;
+        
+        function onGapiScriptLoad() {
+            gapiLoaded = true;
+            if (gisLoaded) {
+                initializeApis();
+            }
+        }
+        
+        function onGisScriptLoad() {
+            gisLoaded = true;
+            if (gapiLoaded) {
+                initializeApis();
+            }
         }
 
         // --- 初期化処理 ---
