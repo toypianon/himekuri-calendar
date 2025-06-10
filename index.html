@@ -60,7 +60,7 @@
             </div>
 
             <div id="comment-section" class="mt-6">
-                <h2 class="text-2xl font-bold text-blue-600 border-b-2 border-blue-500 pb-2 mb-4">今、電話で話している内容</h2>
+                <h2 class="text-2xl font-bold text-blue-600 border-b-2 border-blue-500 pb-2 mb-2">今、電話で話している内容</h2>
                 <div id="comment-list" class="space-y-3 max-h-48 overflow-y-auto pr-2 mb-4">
                      </div>
                 <div class="space-y-2">
@@ -488,9 +488,7 @@
                 const contentDiv = document.createElement('div');
                 const textP = document.createElement('p');
                 textP.textContent = comment.text;
-                // ▼▼▼ ここを変更 ▼▼▼
-                textP.className = 'text-red-600 text-3xl font-bold break-words'; // 太字 (font-bold) を追加
-                // ▲▲▲ ここを変更 ▲▲▲
+                textP.className = 'text-red-600 text-3xl font-bold break-words';
 
                 const timeP = document.createElement('p');
                 const time = comment.timestamp ? comment.timestamp.toDate() : new Date();
@@ -531,7 +529,6 @@
         }
 
         async function deleteComment(commentId) {
-            if (!db) return;
             if (!confirm("この内容を削除しますか？")) return;
 
             try {
