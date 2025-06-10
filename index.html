@@ -62,8 +62,7 @@
             <div id="comment-section" class="mt-6">
                 <h2 class="text-2xl font-bold text-blue-600 border-b-2 border-blue-500 pb-2 mb-4">リアルタイムメッセージ</h2>
                 <div id="comment-list" class="space-y-3 max-h-48 overflow-y-auto pr-2 mb-4">
-                     <p class="text-gray-500 text-center text-sm">メッセージを読み込み中...</p>
-                </div>
+                     </div>
                 <div class="space-y-2">
                     <textarea id="comment-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none" rows="3" placeholder="メッセージを共有しましょう..."></textarea>
                     <button id="add-comment-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">メッセージを追加</button>
@@ -117,12 +116,12 @@
         // STEP 2: 【重要】ここに、Firebaseの準備でコピーした `firebaseConfig` を貼り付けてください
         // =========================================================================
         const firebaseConfig = {
-    apiKey: "AIzaSyB5GgzQsnPffiRKo_OT62fJZVqYY6V61Ok",
-    authDomain: "daily-calendar-comments.firebaseapp.com",
-    projectId: "daily-calendar-comments",
-    storageBucket: "daily-calendar-comments.firebasestorage.app",
-    messagingSenderId: "254431106192",
-    appId: "1:254431106192:web:5e22308f8d9684bfbef415"
+            apiKey: "AIzaSyB5GgzQsnPffiRKo_OT62fJZVqYY6V61Ok",
+            authDomain: "daily-calendar-comments.firebaseapp.com",
+            projectId: "daily-calendar-comments",
+            storageBucket: "daily-calendar-comments.firebasestorage.app",
+            messagingSenderId: "254431106192",
+            appId: "1:254431106192:web:5e22308f8d9684bfbef415"
         };
         // =========================================================================
 
@@ -141,7 +140,19 @@
         
         // --- 要素の取得 ---
         const authorizeButton = document.getElementById('authorize_button');
-        // (中略: 他の要素取得は変更なし)
+        const signoutButton = document.getElementById('signout_button');
+        const eventList = document.getElementById('event-list');
+        const noEventsMsg = document.getElementById('no-events-msg');
+        const errorMessageContainer = document.getElementById('error-message-container');
+        const errorMessageText = document.getElementById('error-message-text');
+        const controlsContainer = document.getElementById('controls-container');
+        const appHeader = document.getElementById('app-header');
+        const sleepOverlay = document.getElementById('sleep-overlay');
+        const sleepModeToggle = document.getElementById('sleep-mode-toggle');
+        const sleepTimeSettings = document.getElementById('sleep-time-settings');
+        const sleepStartTimeInput = document.getElementById('sleep-start-time');
+        const sleepEndTimeInput = document.getElementById('sleep-end-time');
+        const sleepModeStatus = document.getElementById('sleep-mode-status');
         const commentList = document.getElementById('comment-list');
         const commentInput = document.getElementById('comment-input');
         const addCommentButton = document.getElementById('add-comment-button');
@@ -150,22 +161,323 @@
         let eventUpdateIntervalId = null;
         let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
-        let unsubscribeComments = null; // コメントのリアルタイム購読を停止するための関数
+        let unsubscribeComments = null; 
 
-        // (中略: 変更のない関数は省略)
+        function showErrorMessage(message) {
+            errorMessageText.innerText = message;
+            errorMessageContainer.classList.remove('hidden');
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.defer = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        async function initializeApis() {
+            try {
+                await Promise.all([
+                    loadScript('https://apis.google.com/js/api.js'),
+                    loadScript('https://accounts.google.com/gsi/client')
+                ]);
+                
+                await new Promise(resolve => setTimeout(resolve, 500)); 
+
+                gapi = window.gapi;
+                google = window.google;
+
+                await new Promise((resolve, reject) => gapi.load('client', resolve));
+                
+                if (!API_KEY || API_KEY === 'YOUR_API_KEY') throw new Error('APIキーが設定されていません。');
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+                });
+
+                if (!CLIENT_ID || CLIENT_ID === 'YOUR_CLIENT_ID') throw new Error('クライアントIDが設定されていません。');
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: tokenCallback,
+                });
+                
+                tokenClient.requestAccessToken({prompt: 'none'});
+                
+                enableAuthButton();
+
+            } catch (err) {
+                 showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
+                 enableAuthButton();
+            }
+        }
+        
+        function enableAuthButton() {
+            authorizeButton.disabled = false;
+            authorizeButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            authorizeButton.querySelector('span').textContent = 'Googleカレンダーと連携';
+        }
+
+        function handleAuthError(message = '認証の有効期限が切れました。再度連携してください。') {
+            stopEventUpdates();
+            if(gapi) gapi.client.setToken(null);
+            
+            authorizeButton.parentElement.style.display = 'block';
+            controlsContainer.classList.add('hidden');
+            
+            showErrorMessage(message);
+        }
+
+        authorizeButton.onclick = () => {
+            if (tokenClient) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            }
+        };
+        
+        signoutButton.onclick = () => {
+             const token = gapi.client.getToken();
+             if (token !== null) {
+                 google.accounts.oauth2.revoke(token.access_token, () => handleAuthError('ログアウトしました。'));
+             } else {
+                 handleAuthError('ログアウトしました。');
+             }
+        };
+
+        function tokenCallback(tokenResponse) {
+             if (tokenResponse.error) {
+                console.log('サイレント認証に失敗、またはポップアップが閉じられました:', tokenResponse.error);
+                return;
+             }
+             errorMessageContainer.classList.add('hidden');
+             authorizeButton.parentElement.style.display = 'none';
+             controlsContainer.classList.remove('hidden');
+             startAutomaticUpdates();
+        }
+
+        // ▼▼▼ `listUpcomingEvents`関数を修正 ▼▼▼
+        async function listUpcomingEvents() {
+            if (!gapi.client.getToken()) {
+                stopEventUpdates();
+                handleAuthError("セッションが切れました。再度連携してください。");
+                return;
+            }
+            try {
+                const now = new Date();
+                const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+                const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+                
+                const response = await gapi.client.calendar.events.list({
+                    'calendarId': 'primary', 'timeMin': timeMin, 'timeMax': timeMax,
+                    'showDeleted': false, 'singleEvents': true, 'orderBy': 'startTime'
+                });
+
+                const events = response.result.items;
+                eventList.innerHTML = ''; 
+                noEventsMsg.style.display = 'none';
+
+                if (events.length > 0) {
+                    events.forEach(event => {
+                        const start = event.start.dateTime || event.start.date;
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'bg-amber-100 p-4 rounded-lg shadow-sm';
+                        
+                        let timeString = (event.start.dateTime)
+                            ? new Date(start).toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit' })
+                            : "終日";
+
+                        const pTime = document.createElement('p');
+                        pTime.className = 'text-3xl font-bold text-gray-800'; // サイズを元に戻す
+                        pTime.textContent = timeString;
+
+                        const pSummary = document.createElement('p');
+                        pSummary.className = 'text-3xl text-gray-900 mt-1'; // サイズを元に戻す
+                        pSummary.textContent = event.summary;
+
+                        eventDiv.appendChild(pTime);
+                        eventDiv.appendChild(pSummary);
+                        eventList.appendChild(eventDiv);
+                    });
+                } else {
+                    const noEventDiv = document.createElement('div');
+                    noEventDiv.className = 'bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg';
+                    const pMessage = document.createElement('p');
+                    pMessage.className = 'text-2xl font-bold text-blue-800 text-center'; // サイズを元に戻す
+                    pMessage.textContent = '今日は予定はありませんのでゆっくり過ごしてくださいね';
+                    noEventDiv.appendChild(pMessage);
+                    eventList.appendChild(noEventDiv);
+                }
+            } catch (err) {
+                if (err.status === 401) {
+                    handleAuthError();
+                } else {
+                    const errorMessage = err.result?.error?.message || JSON.stringify(err);
+                    showErrorMessage(`カレンダー予定の取得エラー: ${errorMessage}`);
+                    stopEventUpdates();
+                }
+            }
+        }
+        
+        function setupDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const dayIndex = now.getDay();
+            const days = ["日", "月", "火", "水", "木", "金", "土"];
+
+            document.getElementById('year').textContent = `${year}年`;
+            document.getElementById('month-date').textContent = `${month}月${date}日`;
+            document.getElementById('day-of-week').textContent = `(${days[dayIndex]})`;
+            lastCheckedDate = date;
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ja-JP', {
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('current-time').textContent = timeString;
+            
+            const currentHour = now.getHours();
+            const headerTitle = appHeader.querySelector('h1');
+
+            if (currentHour >= 5 && currentHour < 17) {
+                appHeader.classList.remove('bg-purple-600');
+                appHeader.classList.add('bg-yellow-400');
+                headerTitle.classList.remove('text-white');
+                headerTitle.classList.add('text-gray-800');
+            } else {
+                appHeader.classList.remove('bg-yellow-400');
+                appHeader.classList.add('bg-purple-600');
+                headerTitle.classList.remove('text-gray-800');
+                headerTitle.classList.add('text-white');
+            }
+        }
+        
+        function startAutomaticUpdates() {
+            listUpcomingEvents();
+            stopEventUpdates();
+            eventUpdateIntervalId = setInterval(listUpcomingEvents, 5 * 60 * 1000);
+            pageReloadTimeoutId = setTimeout(() => location.reload(), 50 * 60 * 1000);
+        }
+
+        function stopEventUpdates() {
+            if (eventUpdateIntervalId) {
+                clearInterval(eventUpdateIntervalId);
+                eventUpdateIntervalId = null;
+            }
+            if (pageReloadTimeoutId) {
+                clearTimeout(pageReloadTimeoutId);
+                pageReloadTimeoutId = null;
+            }
+        }
+
+        function saveSleepModeSettings() {
+            const settings = {
+                enabled: sleepModeToggle.checked,
+                start: sleepStartTimeInput.value,
+                end: sleepEndTimeInput.value,
+            };
+            localStorage.setItem('sleepModeSettings', JSON.stringify(settings));
+            checkSleepMode();
+        }
+
+        function loadSleepModeSettings() {
+            const savedSettings = JSON.parse(localStorage.getItem('sleepModeSettings'));
+            if (savedSettings) {
+                sleepModeToggle.checked = savedSettings.enabled;
+                sleepStartTimeInput.value = savedSettings.start || '22:00';
+                sleepEndTimeInput.value = savedSettings.end || '06:00';
+            } else {
+                sleepStartTimeInput.value = '22:00';
+                sleepEndTimeInput.value = '06:00';
+            }
+        }
+
+        function checkSleepMode() {
+            const settings = JSON.parse(localStorage.getItem('sleepModeSettings'));
+            if (!settings || !settings.enabled) {
+                sleepOverlay.classList.add('hidden');
+                sleepModeStatus.textContent = 'おやすみモードはオフです。';
+                return;
+            }
+
+            const now = new Date();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            
+            const [startHour, startMinute] = settings.start.split(':').map(Number);
+            const startTime = startHour * 60 + startMinute;
+
+            const [endHour, endMinute] = settings.end.split(':').map(Number);
+            const endTime = endHour * 60 + endMinute;
+
+            let isSleepTime = false;
+            if (startTime > endTime) { 
+                if (currentTime >= startTime || currentTime < endTime) {
+                    isSleepTime = true;
+                }
+            } else {
+                if (currentTime >= startTime && currentTime < endTime) {
+                    isSleepTime = true;
+                }
+            }
+
+            if (isSleepTime) {
+                sleepOverlay.classList.remove('hidden');
+                sleepModeStatus.textContent = `おやすみモード中です（終了: ${settings.end}）。`;
+            } else {
+                sleepOverlay.classList.add('hidden');
+                sleepModeStatus.textContent = `通常モードです（開始: ${settings.start}）。`;
+            }
+        }
+        
+        sleepModeToggle.onchange = saveSleepModeSettings;
+        sleepStartTimeInput.onchange = saveSleepModeSettings;
+        sleepEndTimeInput.onchange = saveSleepModeSettings;
+
 
         // --- リアルタイムメッセージ機能 (Firebase Firestore) ---
 
-        // (中略: getCommentsCollectionPath, subscribeToComments は変更なし)
+        function getCommentsCollectionPath() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `comments/${year}-${month}-${day}/messages`;
+        }
 
-        // メッセージを描画する
+        function subscribeToComments() {
+            if (!db) {
+                commentList.innerHTML = '<p class="text-red-500 text-center text-sm">データベースに接続できません。</p>';
+                return;
+            }
+            if (unsubscribeComments) {
+                unsubscribeComments();
+            }
+
+            const collectionPath = getCommentsCollectionPath();
+            unsubscribeComments = db.collection(collectionPath)
+                .orderBy("timestamp", "asc")
+                .onSnapshot(snapshot => {
+                    renderComments(snapshot.docs);
+                }, error => {
+                    console.error("メッセージの取得に失敗しました: ", error);
+                    showErrorMessage("メッセージのリアルタイム取得に失敗しました。");
+                });
+        }
+
+        // ▼▼▼ `renderComments`関数を修正 ▼▼▼
         function renderComments(docs) {
             commentList.innerHTML = '';
             if (docs.length === 0) {
-                const noCommentMsg = document.createElement('p');
-                noCommentMsg.textContent = 'まだメッセージはありません。';
-                noCommentMsg.className = 'text-gray-500 text-center text-sm';
-                commentList.appendChild(noCommentMsg);
+                // 「まだメッセージはありません」の表示をなくし、何もしないようにする
                 return;
             }
 
@@ -179,10 +491,7 @@
                 const contentDiv = document.createElement('div');
                 const textP = document.createElement('p');
                 textP.textContent = comment.text;
-
-                // ▼▼▼ ここを変更 ▼▼▼
-                textP.className = 'text-red-600 text-3xl break-words'; // 文字色を赤、サイズを3xlに変更
-                // ▲▲▲ ここを変更 ▲▲▲
+                textP.className = 'text-red-600 text-3xl break-words';
 
                 const timeP = document.createElement('p');
                 const time = comment.timestamp ? comment.timestamp.toDate() : new Date();
@@ -195,7 +504,7 @@
 
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = '×';
-                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold ml-2 text-xl'; // ボタンも少し大きく
+                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold ml-2 text-xl';
                 deleteButton.onclick = () => deleteComment(commentId);
                 li.appendChild(deleteButton);
                 
@@ -204,7 +513,6 @@
             commentList.scrollTop = commentList.scrollHeight;
         }
         
-        // 新しいメッセージをFirestoreに追加する
         async function addComment() {
             if (!db) return;
             const text = commentInput.value.trim();
@@ -223,7 +531,6 @@
             }
         }
 
-        // メッセージをFirestoreから削除する
         async function deleteComment(commentId) {
             if (!db) return;
             if (!confirm("このメッセージを削除しますか？")) return;
@@ -245,52 +552,31 @@
             }
         });
         
-        // (中略: 以降のコードは変更なし)
-
+        function startSystemChecks() {
+            setInterval(() => {
+                const currentDate = new Date().getDate();
+                if (currentDate !== lastCheckedDate) {
+                    setupDate();
+                    subscribeToComments();
+                    if (gapi && gapi.client.getToken()) {
+                        listUpcomingEvents();
+                    }
+                }
+                checkSleepMode();
+            }, 60000); 
+        }
 
         // --- 初期化処理 ---
         window.onload = () => {
-            // (中略: 変更なし)
-            subscribeToComments(); // ページ読み込み時にコメントのリアルタイム購読を開始
+            setupDate();
+            updateTime();
+            setInterval(updateTime, 1000);
+            startSystemChecks();
+            initializeApis();
+            loadSleepModeSettings();
+            checkSleepMode();
+            subscribeToComments();
         };
-
-
-        // --- 元のコードから変更がない関数のプレースホルダ ---
-        // この部分は省略していますが、実際にはすべてのコードが含まれています。
-        const appHeader = document.getElementById('app-header');
-        const sleepOverlay = document.getElementById('sleep-overlay');
-        const sleepModeToggle = document.getElementById('sleep-mode-toggle');
-        const sleepTimeSettings = document.getElementById('sleep-time-settings');
-        const sleepStartTimeInput = document.getElementById('sleep-start-time');
-        const sleepEndTimeInput = document.getElementById('sleep-end-time');
-        const sleepModeStatus = document.getElementById('sleep-mode-status');
-        const errorMessageContainer = document.getElementById('error-message-container');
-        const errorMessageText = document.getElementById('error-message-text');
-        const controlsContainer = document.getElementById('controls-container');
-        const eventList = document.getElementById('event-list');
-        const noEventsMsg = document.getElementById('no-events-msg');
-        const signoutButton = document.getElementById('signout_button');
-        function showErrorMessage(message) { errorMessageText.innerText = message; errorMessageContainer.classList.remove('hidden'); };
-        function getCommentsCollectionPath() { const now = new Date(); const year = now.getFullYear(); const month = String(now.getMonth() + 1).padStart(2, '0'); const day = String(now.getDate()).padStart(2, '0'); return `comments/${year}-${month}-${day}/messages`; }
-        function subscribeToComments() { if (!db) { commentList.innerHTML = '<p class="text-red-500 text-center text-sm">データベースに接続できません。</p>'; return; } if (unsubscribeComments) { unsubscribeComments(); } const collectionPath = getCommentsCollectionPath(); unsubscribeComments = db.collection(collectionPath).orderBy("timestamp", "asc").onSnapshot(snapshot => { renderComments(snapshot.docs); }, error => { console.error("コメントの取得に失敗しました: ", error); showErrorMessage("コメントのリアルタイム取得に失敗しました。"); }); }
-        sleepModeToggle.onchange = saveSleepModeSettings; sleepStartTimeInput.onchange = saveSleepModeSettings; sleepEndTimeInput.onchange = saveSleepModeSettings;
-        function loadScript(src) { return new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.async = true; script.defer = true; script.onload = resolve; script.onerror = reject; document.head.appendChild(script); }); };
-        async function initializeApis() { try { await Promise.all([ loadScript('https://apis.google.com/js/api.js'), loadScript('https://accounts.google.com/gsi/client') ]); await new Promise(resolve => setTimeout(resolve, 500)); gapi = window.gapi; google = window.google; await new Promise((resolve, reject) => gapi.load('client', resolve)); if (API_KEY === 'YOUR_API_KEY' || !API_KEY) throw new Error('APIキーが設定されていません。'); await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"], }); if (CLIENT_ID === 'YOUR_CLIENT_ID' || !CLIENT_ID) throw new Error('クライアントIDが設定されていません。'); tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: tokenCallback, }); tokenClient.requestAccessToken({prompt: 'none'}); enableAuthButton(); } catch (err) { showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`); enableAuthButton(); } };
-        function enableAuthButton() { authorizeButton.disabled = false; authorizeButton.classList.remove('opacity-50', 'cursor-not-allowed'); authorizeButton.querySelector('span').textContent = 'Googleカレンダーと連携'; };
-        function handleAuthError(message = '認証の有効期限が切れました。再度連携してください。') { stopEventUpdates(); if(gapi) gapi.client.setToken(null); authorizeButton.parentElement.style.display = 'block'; controlsContainer.classList.add('hidden'); showErrorMessage(message); };
-        authorizeButton.onclick = () => { if (tokenClient) { tokenClient.requestAccessToken({prompt: 'consent'}); } };
-        signoutButton.onclick = () => { const token = gapi.client.getToken(); if (token !== null) { google.accounts.oauth2.revoke(token.access_token, () => handleAuthError('ログアウトしました。')); } else { handleAuthError('ログアウトしました。'); } };
-        function tokenCallback(tokenResponse) { if (tokenResponse.error) { console.log('サイレント認証に失敗、またはポップアップが閉じられました:', tokenResponse.error); return; } errorMessageContainer.classList.add('hidden'); authorizeButton.parentElement.style.display = 'none'; controlsContainer.classList.remove('hidden'); startAutomaticUpdates(); };
-        async function listUpcomingEvents() { if (!gapi.client.getToken()) { stopEventUpdates(); handleAuthError("セッションが切れました。再度連携してください。"); return; } try { const now = new Date(); const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString(); const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString(); const response = await gapi.client.calendar.events.list({ 'calendarId': 'primary', 'timeMin': timeMin, 'timeMax': timeMax, 'showDeleted': false, 'singleEvents': true, 'orderBy': 'startTime' }); const events = response.result.items; eventList.innerHTML = ''; if (events.length > 0) { noEventsMsg.style.display = 'none'; events.forEach(event => { const start = event.start.dateTime || event.start.date; const eventDiv = document.createElement('div'); eventDiv.className = 'bg-amber-100 p-4 rounded-lg shadow-sm'; let timeString = (event.start.dateTime) ? new Date(start).toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit' }) : "終日"; const pTime = document.createElement('p'); pTime.className = 'text-sm font-bold text-amber-800'; pTime.textContent = timeString; const pSummary = document.createElement('p'); pSummary.className = 'text-lg text-gray-900 mt-1'; pSummary.textContent = event.summary; eventDiv.appendChild(pTime); eventDiv.appendChild(pSummary); eventList.appendChild(eventDiv); }); } else { noEventsMsg.style.display = 'none'; const noEventDiv = document.createElement('div'); noEventDiv.className = 'bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg'; const pMessage = document.createElement('p'); pMessage.className = 'text-lg font-bold text-blue-800 text-center'; pMessage.textContent = '今日は予定はありません'; noEventDiv.appendChild(pMessage); eventList.appendChild(noEventDiv); } } catch (err) { if (err.status === 401) { handleAuthError(); } else { const errorMessage = err.result?.error?.message || JSON.stringify(err); showErrorMessage(`カレンダー予定の取得エラー: ${errorMessage}`); stopEventUpdates(); } } };
-        function setupDate() { const now = new Date(); const year = now.getFullYear(); const month = now.getMonth() + 1; const date = now.getDate(); const dayIndex = now.getDay(); const days = ["日", "月", "火", "水", "木", "金", "土"]; document.getElementById('year').textContent = `${year}年`; document.getElementById('month-date').textContent = `${month}月${date}日`; document.getElementById('day-of-week').textContent = `(${days[dayIndex]})`; lastCheckedDate = date; };
-        function updateTime() { const now = new Date(); const timeString = now.toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit', second: '2-digit' }); document.getElementById('current-time').textContent = timeString; const currentHour = now.getHours(); const headerTitle = appHeader.querySelector('h1'); if (currentHour >= 5 && currentHour < 17) { appHeader.classList.remove('bg-purple-600'); appHeader.classList.add('bg-yellow-400'); headerTitle.classList.remove('text-white'); headerTitle.classList.add('text-gray-800'); } else { appHeader.classList.remove('bg-yellow-400'); appHeader.classList.add('bg-purple-600'); headerTitle.classList.remove('text-gray-800'); headerTitle.classList.add('text-white'); } };
-        function startAutomaticUpdates() { listUpcomingEvents(); stopEventUpdates(); eventUpdateIntervalId = setInterval(listUpcomingEvents, 5 * 60 * 1000); pageReloadTimeoutId = setTimeout(() => location.reload(), 50 * 60 * 1000); };
-        function stopEventUpdates() { if (eventUpdateIntervalId) { clearInterval(eventUpdateIntervalId); eventUpdateIntervalId = null; } if (pageReloadTimeoutId) { clearTimeout(pageReloadTimeoutId); pageReloadTimeoutId = null; } };
-        function saveSleepModeSettings() { const settings = { enabled: sleepModeToggle.checked, start: sleepStartTimeInput.value, end: sleepEndTimeInput.value, }; localStorage.setItem('sleepModeSettings', JSON.stringify(settings)); checkSleepMode(); };
-        function loadSleepModeSettings() { const savedSettings = JSON.parse(localStorage.getItem('sleepModeSettings')); if (savedSettings) { sleepModeToggle.checked = savedSettings.enabled; sleepStartTimeInput.value = savedSettings.start || '22:00'; sleepEndTimeInput.value = savedSettings.end || '06:00'; } else { sleepStartTimeInput.value = '22:00'; sleepEndTimeInput.value = '06:00'; } };
-        function checkSleepMode() { const settings = JSON.parse(localStorage.getItem('sleepModeSettings')); if (!settings || !settings.enabled) { sleepOverlay.classList.add('hidden'); sleepModeStatus.textContent = 'おやすみモードはオフです。'; return; } const now = new Date(); const currentTime = now.getHours() * 60 + now.getMinutes(); const [startHour, startMinute] = settings.start.split(':').map(Number); const startTime = startHour * 60 + startMinute; const [endHour, endMinute] = settings.end.split(':').map(Number); const endTime = endHour * 60 + endMinute; let isSleepTime = false; if (startTime > endTime) { if (currentTime >= startTime || currentTime < endTime) { isSleepTime = true; } } else { if (currentTime >= startTime && currentTime < endTime) { isSleepTime = true; } } if (isSleepTime) { sleepOverlay.classList.remove('hidden'); sleepModeStatus.textContent = `おやすみモード中です（終了: ${settings.end}）。`; } else { sleepOverlay.classList.add('hidden'); sleepModeStatus.textContent = `通常モードです（開始: ${settings.start}）。`; } };
-        function startSystemChecks() { setInterval(() => { const currentDate = new Date().getDate(); if (currentDate !== lastCheckedDate) { setupDate(); subscribeToComments(); if (gapi && gapi.client.getToken()) { listUpcomingEvents(); } } checkSleepMode(); }, 60000); };
-        window.onload = () => { setupDate(); updateTime(); setInterval(updateTime, 1000); startSystemChecks(); initializeApis(); loadSleepModeSettings(); checkSleepMode(); subscribeToComments(); };
     </script>
 </body>
 </html>
