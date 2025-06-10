@@ -166,8 +166,8 @@
         </div>
     </div>
     
-    <script async defer src="https://apis.google.com/js/api.js"></script>
-    <script async defer src="https://accounts.google.com/gsi/client"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiScriptLoadedCallback()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisScriptLoadedCallback()"></script>
 
     <script src="config.js"></script>
     <script>
@@ -214,9 +214,29 @@ const CLIENT_ID = config.clientId;
         let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
         
+        let gapiScriptLoaded = false;
+        let gisScriptLoaded = false;
+
         function showErrorMessage(message) {
             errorMessageText.innerText = message;
             errorMessageContainer.classList.remove('hidden');
+        }
+
+        function tryInitializeApis() {
+            if (!gapiScriptLoaded || !gisScriptLoaded) {
+                return; 
+            }
+            initializeApis();
+        }
+
+        function gapiScriptLoadedCallback() {
+            gapiScriptLoaded = true;
+            tryInitializeApis();
+        }
+
+        function gisScriptLoadedCallback() {
+            gisScriptLoaded = true;
+            tryInitializeApis();
         }
 
         async function initializeApis() {
@@ -500,17 +520,6 @@ const CLIENT_ID = config.clientId;
             updateTime();
             setInterval(updateTime, 1000);
             startSystemChecks();
-            
-            // ★★★ 根本的な修正箇所 ★★★
-            // Google APIライブラリの準備を確実に監視する
-            const readyCheckInterval = setInterval(() => {
-                // gapi.client と google.accounts の両方が利用可能かチェック
-                if (window.gapi && window.gapi.client && window.google && window.google.accounts) {
-                    clearInterval(readyCheckInterval); // 両方準備できたら監視を停止
-                    initializeApis(); // 初期化処理を開始
-                }
-            }, 100); // 100ミリ秒ごとに確認
-
             loadSleepModeSettings();
             checkSleepMode(); 
         };
