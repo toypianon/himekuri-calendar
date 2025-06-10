@@ -166,8 +166,8 @@
         </div>
     </div>
     
-    <script async defer src="https://apis.google.com/js/api.js" onload="onGapiScriptLoad()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="onGisScriptLoad()"></script>
+    <script async defer src="https://apis.google.com/js/api.js"></script>
+    <script async defer src="https://accounts.google.com/gsi/client"></script>
 
     <script src="config.js"></script>
     <script>
@@ -214,28 +214,18 @@ const CLIENT_ID = config.clientId;
         let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
         
-        let gapiScriptLoaded = false;
-        let gisScriptLoaded = false;
-
         function showErrorMessage(message) {
             errorMessageText.innerText = message;
             errorMessageContainer.classList.remove('hidden');
         }
 
-        // --- ライブラリ読み込みと初期化処理 ---
-        function tryInitializeApis() {
-            if (!gapiScriptLoaded || !gisScriptLoaded) {
-                return; // 両方のスクリプトが読み込まれるまで待つ
-            }
+        async function initializeApis() {
+            try {
+                gapi = window.gapi;
+                google = window.google;
 
-            gapi = window.gapi;
-            google = window.google;
-
-            gapi.load('client', initializeGapiClient);
-        }
-
-        async function initializeGapiClient() {
-             try {
+                await new Promise((resolve, reject) => gapi.load('client', resolve));
+                
                 if (API_KEY === 'YOUR_API_KEY') throw new Error('APIキーが設定されていません。');
                 await gapi.client.init({
                     apiKey: API_KEY,
@@ -257,16 +247,6 @@ const CLIENT_ID = config.clientId;
                  showErrorMessage(err.message || `初期化に失敗しました: ${JSON.stringify(err)}`);
                  enableAuthButton();
             }
-        }
-        
-        function onGapiScriptLoad() {
-            gapiScriptLoaded = true;
-            tryInitializeApis();
-        }
-
-        function onGisScriptLoad() {
-            gisScriptLoaded = true;
-            tryInitializeApis();
         }
         
         function enableAuthButton() {
@@ -520,6 +500,17 @@ const CLIENT_ID = config.clientId;
             updateTime();
             setInterval(updateTime, 1000);
             startSystemChecks();
+            
+            // ★★★ 根本的な修正箇所 ★★★
+            // Google APIライブラリの準備を確実に監視する
+            const readyCheckInterval = setInterval(() => {
+                // gapi.client と google.accounts の両方が利用可能かチェック
+                if (window.gapi && window.gapi.client && window.google && window.google.accounts) {
+                    clearInterval(readyCheckInterval); // 両方準備できたら監視を停止
+                    initializeApis(); // 初期化処理を開始
+                }
+            }, 100); // 100ミリ秒ごとに確認
+
             loadSleepModeSettings();
             checkSleepMode(); 
         };
