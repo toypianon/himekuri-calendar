@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Googleカレンダー連携 日めくりカレンダー (リアルタイムメッセージ機能付き)</title>
+    <title>Googleカレンダー連携 日めくりカレンダー</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
@@ -60,12 +60,12 @@
             </div>
 
             <div id="comment-section" class="mt-6">
-                <h2 class="text-2xl font-bold text-blue-600 border-b-2 border-blue-500 pb-2 mb-4">リアルタイムメッセージ</h2>
+                <h2 class="text-2xl font-bold text-blue-600 border-b-2 border-blue-500 pb-2 mb-4">今、電話で話している内容</h2>
                 <div id="comment-list" class="space-y-3 max-h-48 overflow-y-auto pr-2 mb-4">
                      </div>
                 <div class="space-y-2">
-                    <textarea id="comment-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none" rows="3" placeholder="メッセージを共有しましょう..."></textarea>
-                    <button id="add-comment-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">メッセージを追加</button>
+                    <textarea id="comment-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none" rows="3" placeholder="内容を入力..."></textarea>
+                    <button id="add-comment-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">内容を追加</button>
                 </div>
             </div>
 
@@ -116,12 +116,12 @@
         // STEP 2: 【重要】ここに、Firebaseの準備でコピーした `firebaseConfig` を貼り付けてください
         // =========================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyB5GgzQsnPffiRKo_OT62fJZVqYY6V61Ok",
-            authDomain: "daily-calendar-comments.firebaseapp.com",
-            projectId: "daily-calendar-comments",
-            storageBucket: "daily-calendar-comments.firebasestorage.app",
-            messagingSenderId: "254431106192",
-            appId: "1:254431106192:web:5e22308f8d9684bfbef415"
+    apiKey: "AIzaSyB5GgzQsnPffiRKo_OT62fJZVqYY6V61Ok",
+    authDomain: "daily-calendar-comments.firebaseapp.com",
+    projectId: "daily-calendar-comments",
+    storageBucket: "daily-calendar-comments.firebasestorage.app",
+    messagingSenderId: "254431106192",
+    appId: "1:254431106192:web:5e22308f8d9684bfbef415"
         };
         // =========================================================================
 
@@ -258,8 +258,7 @@
              controlsContainer.classList.remove('hidden');
              startAutomaticUpdates();
         }
-
-        // ▼▼▼ `listUpcomingEvents`関数を修正 ▼▼▼
+        
         async function listUpcomingEvents() {
             if (!gapi.client.getToken()) {
                 stopEventUpdates();
@@ -291,11 +290,11 @@
                             : "終日";
 
                         const pTime = document.createElement('p');
-                        pTime.className = 'text-3xl font-bold text-gray-800'; // サイズを元に戻す
+                        pTime.className = 'text-3xl font-bold text-gray-800';
                         pTime.textContent = timeString;
 
                         const pSummary = document.createElement('p');
-                        pSummary.className = 'text-3xl text-gray-900 mt-1'; // サイズを元に戻す
+                        pSummary.className = 'text-3xl text-gray-900 mt-1';
                         pSummary.textContent = event.summary;
 
                         eventDiv.appendChild(pTime);
@@ -306,7 +305,7 @@
                     const noEventDiv = document.createElement('div');
                     noEventDiv.className = 'bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg';
                     const pMessage = document.createElement('p');
-                    pMessage.className = 'text-2xl font-bold text-blue-800 text-center'; // サイズを元に戻す
+                    pMessage.className = 'text-2xl font-bold text-blue-800 text-center';
                     pMessage.textContent = '今日は予定はありませんのでゆっくり過ごしてくださいね';
                     noEventDiv.appendChild(pMessage);
                     eventList.appendChild(noEventDiv);
@@ -472,12 +471,10 @@
                     showErrorMessage("メッセージのリアルタイム取得に失敗しました。");
                 });
         }
-
-        // ▼▼▼ `renderComments`関数を修正 ▼▼▼
+        
         function renderComments(docs) {
             commentList.innerHTML = '';
             if (docs.length === 0) {
-                // 「まだメッセージはありません」の表示をなくし、何もしないようにする
                 return;
             }
 
@@ -491,7 +488,9 @@
                 const contentDiv = document.createElement('div');
                 const textP = document.createElement('p');
                 textP.textContent = comment.text;
-                textP.className = 'text-red-600 text-3xl break-words';
+                // ▼▼▼ ここを変更 ▼▼▼
+                textP.className = 'text-red-600 text-3xl font-bold break-words'; // 太字 (font-bold) を追加
+                // ▲▲▲ ここを変更 ▲▲▲
 
                 const timeP = document.createElement('p');
                 const time = comment.timestamp ? comment.timestamp.toDate() : new Date();
@@ -533,7 +532,7 @@
 
         async function deleteComment(commentId) {
             if (!db) return;
-            if (!confirm("このメッセージを削除しますか？")) return;
+            if (!confirm("この内容を削除しますか？")) return;
 
             try {
                 const collectionPath = getCommentsCollectionPath();
