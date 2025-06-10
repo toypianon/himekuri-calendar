@@ -43,29 +43,7 @@
             height: 100vh;
             background-color: rgba(0, 0, 0, 0.9);
             z-index: 9999;
-            pointer-events: none;
-        }
-        /* メッセージモード用のオーバーレイ */
-        #message-display-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: white;
-            z-index: 10000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-        }
-        #message-display-text {
-            font-size: 5rem; /* 大幅に大きく */
-            font-weight: bold;
-            color: black;
-            line-height: 1.2;
+            pointer-events: none; /* 下の要素をクリックできるようにする */
         }
         /* トグルスイッチのスタイル */
         .toggle-checkbox:checked + .toggle-label {
@@ -79,89 +57,69 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
     <!-- おやすみモード用のオーバーレイ -->
     <div id="sleep-overlay" class="hidden"></div>
-    <!-- メッセージ表示用のオーバーレイ -->
-    <div id="message-display-overlay" class="hidden">
-        <p id="message-display-text"></p>
-    </div>
 
     <div class="w-full max-w-xl mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden">
-        <!-- メイン画面 -->
-        <div id="main-content">
-            <div id="app-header" class="p-4 text-center transition-colors duration-500">
-                <h1 class="text-xl font-bold">日めくりカレンダー</h1>
-            </div>
-            
-            <div id="error-message-container" class="hidden p-4 m-4 bg-red-100 border-l-4 border-red-500 text-red-700">
-                 <p class="font-bold">エラー</p>
-                 <p id="error-message-text"></p>
-            </div>
-
-            <div class="p-6 pt-2">
-                <div class="calendar-tear shadow-lg rounded-lg p-3 border-2 border-gray-200 mb-4">
-                    <div class="text-center">
-                        <p id="year" class="text-gray-500 text-lg"></p>
-                        <div class="flex items-baseline justify-center space-x-2">
-                            <p id="month-date" class="font-roboto-mono text-5xl font-bold text-gray-800"></p>
-                            <p id="day-of-week" class="font-roboto-mono text-5xl font-bold text-red-500"></p>
-                        </div>
-                        <p id="current-time" class="font-roboto-mono text-2xl text-gray-600 mt-1"></p>
-                    </div>
-                </div>
-
-                <div id="auth-container">
-                    <button id="authorize_button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center space-x-2 opacity-50 cursor-not-allowed" disabled>
-                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.805 10.041C21.911 10.681 21.96 11.341 21.96 12C21.96 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C15.42 2 18.356 3.733 20.063 6.205L16.494 9.773H12V14.227H17.495C17.248 15.733 16.331 16.994 15.006 17.844C14.07 18.452 12.885 18.773 12 18.773C9.295 18.773 7.027 16.821 6.373 14.331H2.628C3.39 18.494 7.299 21.545 12 21.545C14.735 21.545 17.152 20.669 18.91 19.163C20.978 17.404 21.805 14.863 21.805 12.432V10.041Z" fill="#FFFFFF"/></svg>
-                        <span>準備中...</span>
-                    </button>
-                </div>
-
-                <div id="events-container" class="mt-6">
-                    <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
-                    <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
-                         <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
-                    </div>
-                </div>
-
-                <div id="controls-container" class="hidden mt-6 space-y-4">
-                    <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
-                         <div class="pt-3 border-t">
-                             <button id="message-mode-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">メッセージ表示モードに切り替え</button>
-                         </div>
-                        <div class="border-t pt-3">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-sm font-medium text-gray-700">おやすみモード</span>
-                                 <div class="relative">
-                                    <input type="checkbox" id="sleep-mode-toggle" class="sr-only toggle-checkbox">
-                                    <div class="block bg-gray-200 w-14 h-8 rounded-full toggle-label">
-                                        <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow transition-transform"></div>
-                                    </div>
-                                </div>
-                            </label>
-                            <div id="sleep-time-settings" class="mt-2 space-y-2">
-                                <div class="flex items-center space-x-2">
-                                    <label for="sleep-start-time" class="text-sm text-gray-600">開始:</label>
-                                    <input type="time" id="sleep-start-time" class="w-full p-1 border-gray-300 rounded-md">
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <label for="sleep-end-time" class="text-sm text-gray-600">終了:</label>
-                                    <input type="time" id="sleep-end-time" class="w-full p-1 border-gray-300 rounded-md">
-                                </div>
-                                <p id="sleep-mode-status" class="text-xs text-gray-500 mt-2 h-4"></p>
-                            </div>
-                        </div>
-                    </div>
-                    <button id="signout_button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログアウト</button>
-                </div>
-            </div>
+        <div id="app-header" class="p-4 text-center transition-colors duration-500">
+            <h1 class="text-xl font-bold">日めくりカレンダー</h1>
+        </div>
+        
+        <div id="error-message-container" class="hidden p-4 m-4 bg-red-100 border-l-4 border-red-500 text-red-700">
+             <p class="font-bold">エラー</p>
+             <p id="error-message-text"></p>
         </div>
 
-        <!-- メッセージモード画面 -->
-        <div id="message-mode-content" class="hidden p-6">
-            <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-blue-500 pb-2 mb-4">メッセージ作成</h2>
-            <textarea id="message-input" class="w-full h-48 p-2 border border-gray-300 rounded-md text-2xl" placeholder="ここにお父様へのメッセージを入力..."></textarea>
-            <div class="mt-4 space-y-2">
-                <button id="show-message-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-xl">画面に表示する</button>
-                <button id="back-to-calendar-button" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg">カレンダーに戻る</button>
+        <div class="p-6 pt-2">
+            <div class="calendar-tear shadow-lg rounded-lg p-3 border-2 border-gray-200 mb-4">
+                <div class="text-center">
+                    <p id="year" class="text-gray-500 text-lg"></p>
+                    <div class="flex items-baseline justify-center space-x-2">
+                        <p id="month-date" class="font-roboto-mono text-5xl font-bold text-gray-800"></p>
+                        <p id="day-of-week" class="font-roboto-mono text-5xl font-bold text-red-500"></p>
+                    </div>
+                    <p id="current-time" class="font-roboto-mono text-2xl text-gray-600 mt-1"></p>
+                </div>
+            </div>
+
+            <div id="auth-container">
+                <button id="authorize_button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center space-x-2 opacity-50 cursor-not-allowed" disabled>
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.805 10.041C21.911 10.681 21.96 11.341 21.96 12C21.96 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C15.42 2 18.356 3.733 20.063 6.205L16.494 9.773H12V14.227H17.495C17.248 15.733 16.331 16.994 15.006 17.844C14.07 18.452 12.885 18.773 12 18.773C9.295 18.773 7.027 16.821 6.373 14.331H2.628C3.39 18.494 7.299 21.545 12 21.545C14.735 21.545 17.152 20.669 18.91 19.163C20.978 17.404 21.805 14.863 21.805 12.432V10.041Z" fill="#FFFFFF"/></svg>
+                    <span>準備中...</span>
+                </button>
+            </div>
+
+            <div id="events-container" class="mt-6">
+                <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
+                <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                     <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
+                </div>
+            </div>
+
+            <div id="controls-container" class="hidden mt-6 space-y-4">
+                <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
+                    <div class="pt-3">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="text-sm font-medium text-gray-700">おやすみモード</span>
+                             <div class="relative">
+                                <input type="checkbox" id="sleep-mode-toggle" class="sr-only toggle-checkbox">
+                                <div class="block bg-gray-200 w-14 h-8 rounded-full toggle-label">
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow transition-transform"></div>
+                                </div>
+                            </div>
+                        </label>
+                        <div id="sleep-time-settings" class="mt-2 space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-start-time" class="text-sm text-gray-600">開始:</label>
+                                <input type="time" id="sleep-start-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-end-time" class="text-sm text-gray-600">終了:</label>
+                                <input type="time" id="sleep-end-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <p id="sleep-mode-status" class="text-xs text-gray-500 mt-2 h-4"></p>
+                        </div>
+                    </div>
+                </div>
+                <button id="signout_button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログアウト</button>
             </div>
         </div>
     </div>
@@ -184,16 +142,6 @@ const CLIENT_ID = config.clientId;
         const errorMessageText = document.getElementById('error-message-text');
         const controlsContainer = document.getElementById('controls-container');
         const appHeader = document.getElementById('app-header');
-        
-        // メッセージモード関連
-        const mainContent = document.getElementById('main-content');
-        const messageModeContent = document.getElementById('message-mode-content');
-        const messageModeButton = document.getElementById('message-mode-button');
-        const backToCalendarButton = document.getElementById('back-to-calendar-button');
-        const messageInput = document.getElementById('message-input');
-        const showMessageButton = document.getElementById('show-message-button');
-        const messageDisplayOverlay = document.getElementById('message-display-overlay');
-        const messageDisplayText = document.getElementById('message-display-text');
 
         // おやすみモード関連
         const sleepOverlay = document.getElementById('sleep-overlay');
@@ -305,7 +253,7 @@ const CLIENT_ID = config.clientId;
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
              controlsContainer.classList.remove('hidden');
-             listUpcomingEvents();
+             startAutomaticUpdates();
         }
 
         async function listUpcomingEvents() {
@@ -410,28 +358,27 @@ const CLIENT_ID = config.clientId;
             }
         }
         
-        // --- メッセージモードのロジック ---
-        messageModeButton.onclick = () => {
-            mainContent.classList.add('hidden');
-            messageModeContent.classList.remove('hidden');
-        };
+        function startAutomaticUpdates() {
+            listUpcomingEvents(); // まず一度実行
+            stopEventUpdates(); // 既存のタイマーをクリア
 
-        backToCalendarButton.onclick = () => {
-            mainContent.classList.remove('hidden');
-            messageModeContent.classList.add('hidden');
-        };
+            // 5分ごとに予定を更新
+            eventUpdateIntervalId = setInterval(listUpcomingEvents, 5 * 60 * 1000);
+            
+            // 50分後にページ全体をリロード
+            pageReloadTimeoutId = setTimeout(() => location.reload(), 50 * 60 * 1000);
+        }
 
-        showMessageButton.onclick = () => {
-            const message = messageInput.value;
-            if (message.trim() === '') return;
-            messageDisplayText.innerText = message;
-            messageDisplayOverlay.classList.remove('hidden');
-        };
-        
-        messageDisplayOverlay.onclick = () => {
-            messageDisplayOverlay.classList.add('hidden');
-        };
-
+        function stopEventUpdates() {
+            if (eventUpdateIntervalId) {
+                clearInterval(eventUpdateIntervalId);
+                eventUpdateIntervalId = null;
+            }
+            if (pageReloadTimeoutId) {
+                clearTimeout(pageReloadTimeoutId);
+                pageReloadTimeoutId = null;
+            }
+        }
 
         // --- おやすみモードのロジック ---
         function saveSleepModeSettings() {
