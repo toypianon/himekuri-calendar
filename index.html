@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Googleカレンダー連携 日めくりカレンダー (完成版)</title>
+    <title>Googleカレンダー連携 日めくりカレンダー (コメント機能付き)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
@@ -30,10 +30,10 @@
             background-size: 20px 20px;
             background-position: 0 0, 10px 0;
         }
-        #event-list::-webkit-scrollbar { width: 8px; }
-        #event-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-        #event-list::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
-        #event-list::-webkit-scrollbar-thumb:hover { background: #555; }
+        #event-list::-webkit-scrollbar, #comment-list::-webkit-scrollbar { width: 8px; }
+        #event-list::-webkit-scrollbar-track, #comment-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        #event-list::-webkit-scrollbar-thumb, #comment-list::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        #event-list::-webkit-scrollbar-thumb:hover, #comment-list::-webkit-scrollbar-thumb:hover { background: #555; }
         /* おやすみモード用のオーバーレイ */
         #sleep-overlay {
             position: fixed;
@@ -43,33 +43,11 @@
             height: 100vh;
             background-color: rgba(0, 0, 0, 0.9);
             z-index: 9999;
-            pointer-events: none;
-        }
-        /* メッセージモード用のオーバーレイ */
-        #message-display-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: white;
-            z-index: 10000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-        }
-        #message-display-text {
-            font-size: 5rem;
-            font-weight: bold;
-            color: black;
-            line-height: 1.2;
+            pointer-events: none; /* 下の要素をクリックできるようにする */
         }
         /* トグルスイッチのスタイル */
         .toggle-checkbox:checked + .toggle-label {
-            background-color: #4ade80;
+            background-color: #4ade80; /* green-400 */
         }
         .toggle-checkbox:checked + .toggle-label .dot {
             transform: translateX(1.5rem);
@@ -77,91 +55,79 @@
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-    <!-- おやすみモード用のオーバーレイ -->
     <div id="sleep-overlay" class="hidden"></div>
-    <!-- メッセージ表示用のオーバーレイ -->
-    <div id="message-display-overlay" class="hidden">
-        <p id="message-display-text"></p>
-    </div>
 
     <div class="w-full max-w-xl mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden">
-        <!-- メイン画面 -->
-        <div id="main-content">
-            <div id="app-header" class="p-4 text-center transition-colors duration-500">
-                <h1 class="text-xl font-bold">日めくりカレンダー</h1>
-            </div>
-            
-            <div id="error-message-container" class="hidden p-4 m-4 bg-red-100 border-l-4 border-red-500 text-red-700">
-                 <p class="font-bold">エラー</p>
-                 <p id="error-message-text"></p>
-            </div>
-
-            <div class="p-6 pt-2">
-                <div class="calendar-tear shadow-lg rounded-lg p-3 border-2 border-gray-200 mb-4">
-                    <div class="text-center">
-                        <p id="year" class="text-gray-500 text-lg"></p>
-                        <div class="flex items-baseline justify-center space-x-2">
-                            <p id="month-date" class="font-roboto-mono text-5xl font-bold text-gray-800"></p>
-                            <p id="day-of-week" class="font-roboto-mono text-5xl font-bold text-red-500"></p>
-                        </div>
-                        <p id="current-time" class="font-roboto-mono text-2xl text-gray-600 mt-1"></p>
-                    </div>
-                </div>
-
-                <div id="auth-container">
-                    <button id="authorize_button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center space-x-2 opacity-50 cursor-not-allowed" disabled>
-                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.805 10.041C21.911 10.681 21.96 11.341 21.96 12C21.96 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C15.42 2 18.356 3.733 20.063 6.205L16.494 9.773H12V14.227H17.495C17.248 15.733 16.331 16.994 15.006 17.844C14.07 18.452 12.885 18.773 12 18.773C9.295 18.773 7.027 16.821 6.373 14.331H2.628C3.39 18.494 7.299 21.545 12 21.545C14.735 21.545 17.152 20.669 18.91 19.163C20.978 17.404 21.805 14.863 21.805 12.432V10.041Z" fill="#FFFFFF"/></svg>
-                        <span>準備中...</span>
-                    </button>
-                </div>
-
-                <div id="events-container" class="mt-6">
-                    <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
-                    <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
-                         <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
-                    </div>
-                </div>
-
-                <div id="controls-container" class="hidden mt-6 space-y-4">
-                    <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
-                         <div class="pt-3 border-t">
-                             <button id="message-mode-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">メッセージ表示モードに切り替え</button>
-                         </div>
-                        <div class="border-t pt-3">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-sm font-medium text-gray-700">おやすみモード</span>
-                                 <div class="relative">
-                                    <input type="checkbox" id="sleep-mode-toggle" class="sr-only toggle-checkbox">
-                                    <div class="block bg-gray-200 w-14 h-8 rounded-full toggle-label">
-                                        <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow transition-transform"></div>
-                                    </div>
-                                </div>
-                            </label>
-                            <div id="sleep-time-settings" class="mt-2 space-y-2">
-                                <div class="flex items-center space-x-2">
-                                    <label for="sleep-start-time" class="text-sm text-gray-600">開始:</label>
-                                    <input type="time" id="sleep-start-time" class="w-full p-1 border-gray-300 rounded-md">
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <label for="sleep-end-time" class="text-sm text-gray-600">終了:</label>
-                                    <input type="time" id="sleep-end-time" class="w-full p-1 border-gray-300 rounded-md">
-                                </div>
-                                <p id="sleep-mode-status" class="text-xs text-gray-500 mt-2 h-4"></p>
-                            </div>
-                        </div>
-                    </div>
-                    <button id="signout_button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログアウト</button>
-                </div>
-            </div>
+        <div id="app-header" class="p-4 text-center transition-colors duration-500">
+            <h1 class="text-xl font-bold">日めくりカレンダー</h1>
+        </div>
+        
+        <div id="error-message-container" class="hidden p-4 m-4 bg-red-100 border-l-4 border-red-500 text-red-700">
+             <p class="font-bold">エラー</p>
+             <p id="error-message-text"></p>
         </div>
 
-        <!-- メッセージモード画面 -->
-        <div id="message-mode-content" class="hidden p-6">
-            <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-blue-500 pb-2 mb-4">メッセージ作成</h2>
-            <textarea id="message-input" class="w-full h-48 p-2 border border-gray-300 rounded-md text-2xl" placeholder="ここにお父様へのメッセージを入力..."></textarea>
-            <div class="mt-4 space-y-2">
-                <button id="show-message-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-xl">画面に表示する</button>
-                <button id="back-to-calendar-button" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg">カレンダーに戻る</button>
+        <div class="p-6 pt-2">
+            <div class="calendar-tear shadow-lg rounded-lg p-3 border-2 border-gray-200 mb-4">
+                <div class="text-center">
+                    <p id="year" class="text-gray-500 text-lg"></p>
+                    <div class="flex items-baseline justify-center space-x-2">
+                        <p id="month-date" class="font-roboto-mono text-5xl font-bold text-gray-800"></p>
+                        <p id="day-of-week" class="font-roboto-mono text-5xl font-bold text-red-500"></p>
+                    </div>
+                    <p id="current-time" class="font-roboto-mono text-2xl text-gray-600 mt-1"></p>
+                </div>
+            </div>
+
+            <div id="auth-container">
+                <button id="authorize_button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex items-center justify-center space-x-2 opacity-50 cursor-not-allowed" disabled>
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.805 10.041C21.911 10.681 21.96 11.341 21.96 12C21.96 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C15.42 2 18.356 3.733 20.063 6.205L16.494 9.773H12V14.227H17.495C17.248 15.733 16.331 16.994 15.006 17.844C14.07 18.452 12.885 18.773 12 18.773C9.295 18.773 7.027 16.821 6.373 14.331H2.628C3.39 18.494 7.299 21.545 12 21.545C14.735 21.545 17.152 20.669 18.91 19.163C20.978 17.404 21.805 14.863 21.805 12.432V10.041Z" fill="#FFFFFF"/></svg>
+                    <span>準備中...</span>
+                </button>
+            </div>
+
+            <div id="events-container" class="mt-6">
+                <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-red-500 pb-2 mb-4">今日の予定</h2>
+                <div id="event-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                     <p id="no-events-msg" class="text-gray-500">連携するとここに今日の予定が表示されます。</p>
+                </div>
+            </div>
+
+            <div id="comment-section" class="mt-6">
+                <h2 class="text-2xl font-bold text-gray-700 border-b-2 border-blue-500 pb-2 mb-4">今日のメモ・コメント</h2>
+                <div id="comment-list" class="space-y-3 max-h-48 overflow-y-auto pr-2 mb-4">
+                    </div>
+                <div class="space-y-2">
+                    <textarea id="comment-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none" rows="3" placeholder="今日のメモやコメントを残しましょう..."></textarea>
+                    <button id="add-comment-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">コメントを追加</button>
+                </div>
+            </div>
+            <div id="controls-container" class="hidden mt-6 space-y-4">
+                <div class="p-3 bg-gray-50 rounded-lg border space-y-3">
+                    <div class="pt-3">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <span class="text-sm font-medium text-gray-700">おやすみモード</span>
+                             <div class="relative">
+                                <input type="checkbox" id="sleep-mode-toggle" class="sr-only toggle-checkbox">
+                                <div class="block bg-gray-200 w-14 h-8 rounded-full toggle-label">
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow transition-transform"></div>
+                                </div>
+                            </div>
+                        </label>
+                        <div id="sleep-time-settings" class="mt-2 space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-start-time" class="text-sm text-gray-600">開始:</label>
+                                <input type="time" id="sleep-start-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="sleep-end-time" class="text-sm text-gray-600">終了:</label>
+                                <input type="time" id="sleep-end-time" class="w-full p-1 border-gray-300 rounded-md">
+                            </div>
+                            <p id="sleep-mode-status" class="text-xs text-gray-500 mt-2 h-4"></p>
+                        </div>
+                    </div>
+                </div>
+                <button id="signout_button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログアウト</button>
             </div>
         </div>
     </div>
@@ -171,8 +137,8 @@
         // =========================================================================
         // STEP 1: ご自身のAPIキーとクライアントIDをここに設定してください
         // =========================================================================
-const API_KEY = config.apiKey;
-const CLIENT_ID = config.clientId;
+        const API_KEY = config.apiKey;
+        const CLIENT_ID = config.clientId;
 
         const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
@@ -184,16 +150,6 @@ const CLIENT_ID = config.clientId;
         const errorMessageText = document.getElementById('error-message-text');
         const controlsContainer = document.getElementById('controls-container');
         const appHeader = document.getElementById('app-header');
-        
-        // メッセージモード関連
-        const mainContent = document.getElementById('main-content');
-        const messageModeContent = document.getElementById('message-mode-content');
-        const messageModeButton = document.getElementById('message-mode-button');
-        const backToCalendarButton = document.getElementById('back-to-calendar-button');
-        const messageInput = document.getElementById('message-input');
-        const showMessageButton = document.getElementById('show-message-button');
-        const messageDisplayOverlay = document.getElementById('message-display-overlay');
-        const messageDisplayText = document.getElementById('message-display-text');
 
         // おやすみモード関連
         const sleepOverlay = document.getElementById('sleep-overlay');
@@ -202,7 +158,12 @@ const CLIENT_ID = config.clientId;
         const sleepStartTimeInput = document.getElementById('sleep-start-time');
         const sleepEndTimeInput = document.getElementById('sleep-end-time');
         const sleepModeStatus = document.getElementById('sleep-mode-status');
-
+        
+        // ▼▼▼ コメント機能関連の要素を取得 ▼▼▼
+        const commentList = document.getElementById('comment-list');
+        const commentInput = document.getElementById('comment-input');
+        const addCommentButton = document.getElementById('add-comment-button');
+        // ▲▲▲ コメント機能関連の要素を取得 ▲▲▲
 
         let gapi;
         let google;
@@ -210,27 +171,46 @@ const CLIENT_ID = config.clientId;
         let eventUpdateIntervalId = null;
         let pageReloadTimeoutId = null;
         let lastCheckedDate = new Date().getDate();
-        
+
         function showErrorMessage(message) {
             errorMessageText.innerText = message;
             errorMessageContainer.classList.remove('hidden');
         }
 
+        // --- ライブラリ読み込みと初期化処理 ---
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.defer = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
         async function initializeApis() {
             try {
-                if (API_KEY === 'YOUR_API_KEY') throw new Error('APIキーが設定されていません。');
-                if (CLIENT_ID === 'YOUR_CLIENT_ID') throw new Error('クライアントIDが設定されていません。');
+                await Promise.all([
+                    loadScript('https://apis.google.com/js/api.js'),
+                    loadScript('https://accounts.google.com/gsi/client')
+                ]);
+                
+                await new Promise(resolve => setTimeout(resolve, 500)); 
 
                 gapi = window.gapi;
                 google = window.google;
 
                 await new Promise((resolve, reject) => gapi.load('client', resolve));
                 
+                if (API_KEY === 'YOUR_API_KEY') throw new Error('APIキーが設定されていません。');
                 await gapi.client.init({
                     apiKey: API_KEY,
                     discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
                 });
 
+                if (CLIENT_ID === 'YOUR_CLIENT_ID') throw new Error('クライアントIDが設定されていません。');
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID,
                     scope: SCOPES,
@@ -286,7 +266,7 @@ const CLIENT_ID = config.clientId;
              errorMessageContainer.classList.add('hidden');
              authorizeButton.parentElement.style.display = 'none';
              controlsContainer.classList.remove('hidden');
-             listUpcomingEvents();
+             startAutomaticUpdates();
         }
 
         async function listUpcomingEvents() {
@@ -391,28 +371,27 @@ const CLIENT_ID = config.clientId;
             }
         }
         
-        // --- メッセージモードのロジック ---
-        messageModeButton.onclick = () => {
-            mainContent.classList.add('hidden');
-            messageModeContent.classList.remove('hidden');
-        };
+        function startAutomaticUpdates() {
+            listUpcomingEvents(); // まず一度実行
+            stopEventUpdates(); // 既存のタイマーをクリア
 
-        backToCalendarButton.onclick = () => {
-            mainContent.classList.remove('hidden');
-            messageModeContent.classList.add('hidden');
-        };
+            // 5分ごとに予定を更新
+            eventUpdateIntervalId = setInterval(listUpcomingEvents, 5 * 60 * 1000);
+            
+            // 50分後にページ全体をリロード
+            pageReloadTimeoutId = setTimeout(() => location.reload(), 50 * 60 * 1000);
+        }
 
-        showMessageButton.onclick = () => {
-            const message = messageInput.value;
-            if (message.trim() === '') return;
-            messageDisplayText.innerText = message;
-            messageDisplayOverlay.classList.remove('hidden');
-        };
-        
-        messageDisplayOverlay.onclick = () => {
-            messageDisplayOverlay.classList.add('hidden');
-        };
-
+        function stopEventUpdates() {
+            if (eventUpdateIntervalId) {
+                clearInterval(eventUpdateIntervalId);
+                eventUpdateIntervalId = null;
+            }
+            if (pageReloadTimeoutId) {
+                clearTimeout(pageReloadTimeoutId);
+                pageReloadTimeoutId = null;
+            }
+        }
 
         // --- おやすみモードのロジック ---
         function saveSleepModeSettings() {
@@ -479,11 +458,111 @@ const CLIENT_ID = config.clientId;
         sleepEndTimeInput.onchange = saveSleepModeSettings;
 
 
+        // --- ▼▼▼ コメント機能のロジック ▼▼▼ ---
+
+        // 日付に基づいたlocalStorageのキーを生成 (例: "comments-2025-06-11")
+        function getCommentsKey() {
+            const now = new Date();
+            // タイムゾーンを考慮してYYYY-MM-DD形式の文字列を生成
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `comments-${year}-${month}-${day}`;
+        }
+
+        // コメントをlocalStorageから読み込む
+        function getComments() {
+            const key = getCommentsKey();
+            const commentsJSON = localStorage.getItem(key);
+            return commentsJSON ? JSON.parse(commentsJSON) : [];
+        }
+
+        // コメントをlocalStorageに保存する
+        function saveComments(comments) {
+            const key = getCommentsKey();
+            localStorage.setItem(key, JSON.stringify(comments));
+        }
+
+        // コメントを描画する
+        function renderComments() {
+            commentList.innerHTML = '';
+            const comments = getComments();
+
+            if (comments.length === 0) {
+                const noCommentMsg = document.createElement('p');
+                noCommentMsg.textContent = 'まだコメントはありません。';
+                noCommentMsg.className = 'text-gray-500 text-center text-sm';
+                commentList.appendChild(noCommentMsg);
+                return;
+            }
+
+            comments.forEach((comment, index) => {
+                const li = document.createElement('div');
+                li.className = 'bg-gray-100 p-3 rounded-lg flex justify-between items-start';
+
+                const contentDiv = document.createElement('div');
+                
+                const textP = document.createElement('p');
+                textP.textContent = comment.text;
+                textP.className = 'text-gray-800';
+
+                const timeP = document.createElement('p');
+                timeP.textContent = new Date(comment.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                timeP.className = 'text-xs text-gray-500 mt-1';
+                
+                contentDiv.appendChild(textP);
+                contentDiv.appendChild(timeP);
+                li.appendChild(contentDiv);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '×';
+                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold ml-2';
+                deleteButton.onclick = () => {
+                    deleteComment(index);
+                };
+                li.appendChild(deleteButton);
+                
+                commentList.appendChild(li);
+            });
+        }
+        
+        // 新しいコメントを追加する
+        function addComment() {
+            const text = commentInput.value.trim();
+            if (text === '') return;
+
+            const comments = getComments();
+            const newComment = {
+                text: text,
+                timestamp: new Date().toISOString()
+            };
+
+            comments.push(newComment);
+            saveComments(comments);
+            renderComments();
+            commentInput.value = ''; // 入力欄をクリア
+        }
+
+        // コメントを削除する
+        function deleteComment(index) {
+            let comments = getComments();
+            comments.splice(index, 1);
+            saveComments(comments);
+            renderComments();
+        }
+
+        // 追加ボタンのクリックイベント
+        addCommentButton.onclick = addComment;
+        
+        // --- ▲▲▲ コメント機能のロジック ▲▲▲ ---
+
+
         function startSystemChecks() {
             setInterval(() => {
                 const currentDate = new Date().getDate();
                 if (currentDate !== lastCheckedDate) {
                     setupDate();
+                    renderComments(); // 日付が変わったらコメントも更新
                     if (gapi && gapi.client.getToken()) {
                         listUpcomingEvents();
                     }
@@ -492,24 +571,16 @@ const CLIENT_ID = config.clientId;
             }, 60000); 
         }
 
-        // --- ★★★ 根本的な修正箇所 ★★★ ---
+        // --- 初期化処理 ---
         window.onload = () => {
             setupDate();
             updateTime();
             setInterval(updateTime, 1000);
             startSystemChecks();
-            
-            // Google APIライブラリの準備を確実に監視する
-            const readyCheckInterval = setInterval(() => {
-                // gapi.client と google.accounts の両方が利用可能かチェック
-                if (window.gapi && window.gapi.client && window.google && window.google.accounts) {
-                    clearInterval(readyCheckInterval); // 両方準備できたら監視を停止
-                    initializeApis(); // 初期化処理を開始
-                }
-            }, 100); // 100ミリ秒ごとに確認
-
+            initializeApis();
             loadSleepModeSettings();
-            checkSleepMode(); 
+            checkSleepMode();
+            renderComments(); // ページ読み込み時にコメントをレンダリング
         };
     </script>
 </body>
