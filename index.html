@@ -65,8 +65,10 @@
                      </div>
                 <div class="space-y-2">
                     <textarea id="comment-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none" rows="3" placeholder="内容を入力..."></textarea>
-                    <button id="add-comment-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">内容を追加</button>
-                    <button id="delete-all-comments-button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">すべての伝言を削除</button>
+                    <div class="flex space-x-2">
+                        <button id="add-comment-button" class="w-1/2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">内容を追加</button>
+                        <button id="delete-all-comments-button" class="w-1/2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">すべての伝言を削除</button>
+                    </div>
                     </div>
             </div>
 
@@ -157,9 +159,7 @@
         const commentList = document.getElementById('comment-list');
         const commentInput = document.getElementById('comment-input');
         const addCommentButton = document.getElementById('add-comment-button');
-        // ▼▼▼ 変更点3: 追加したボタンの要素を取得 ▼▼▼
         const deleteAllCommentsButton = document.getElementById('delete-all-comments-button');
-        // ▲▲▲ 変更点3 ▲▲▲
 
         let gapi, google, tokenClient;
         let eventUpdateIntervalId = null;
@@ -487,11 +487,17 @@
                 const commentId = doc.id;
 
                 const li = document.createElement('div');
-                li.className = 'bg-gray-100 p-3 rounded-lg flex justify-between items-start';
+                // ▼▼▼ 変更点2: コメントのレイアウトを調整 ▼▼▼
+                li.className = 'bg-gray-100 p-3 rounded-lg flex justify-between items-start space-x-4';
 
                 const contentDiv = document.createElement('div');
+                // 幅を可変にし、テキスト折り返しを有効にするクラスを追加
+                contentDiv.className = 'flex-grow min-w-0'; 
+                // ▲▲▲ 変更点2 ▲▲▲
+
                 const textP = document.createElement('p');
                 textP.textContent = comment.text;
+                // このクラスでテキストがコンテナの幅で折り返される
                 textP.className = 'text-red-600 text-3xl font-bold break-words';
 
                 const timeP = document.createElement('p');
@@ -505,7 +511,9 @@
 
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = '×';
-                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold ml-2 text-xl';
+                // ▼▼▼ 変更点2(続き): ボタンが縮まないようにクラスを調整 ▼▼▼
+                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold text-xl flex-shrink-0';
+                // ▲▲▲ 変更点2(続き) ▲▲▲
                 deleteButton.onclick = () => deleteComment(commentId);
                 li.appendChild(deleteButton);
                 
@@ -544,7 +552,6 @@
             }
         }
         
-        // ▼▼▼ 変更点4: すべての伝言を削除する関数を追加 ▼▼▼
         async function deleteAllComments() {
             if (!db) {
                 showErrorMessage("データベースに接続されていません。");
@@ -573,7 +580,6 @@
                 showErrorMessage("すべての伝言の削除に失敗しました。");
             }
         }
-        // ▲▲▲ 変更点4 ▲▲▲
 
         addCommentButton.onclick = addComment;
         commentInput.addEventListener('keydown', (e) => {
@@ -583,9 +589,7 @@
             }
         });
         
-        // ▼▼▼ 変更点5: 追加したボタンに関数を割り当て ▼▼▼
         deleteAllCommentsButton.onclick = deleteAllComments;
-        // ▲▲▲ 変更点5 ▲▲▲
         
         function startSystemChecks() {
             setInterval(() => {
