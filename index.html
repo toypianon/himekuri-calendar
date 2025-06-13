@@ -336,7 +336,7 @@
             const days = ["日", "月", "火", "水", "木", "金", "土"];
 
             document.getElementById('year').textContent = `${year}年`;
-            document.getElementById('month-date').textContent = `<span class="math-inline">\{month\}月</span>{date}日`;
+            document.getElementById('month-date').textContent = `${month}月${date}日`;
             document.getElementById('day-of-week').textContent = `(${days[dayIndex]})`;
             lastCheckedDate = date;
         }
@@ -440,3 +440,177 @@
             } else {
                 sleepOverlay.classList.add('hidden');
                 sleepModeStatus.textContent = `通常モードです（開始: ${settings.start}）。`;
+            }
+        }
+        
+        sleepModeToggle.onchange = saveSleepModeSettings;
+        sleepStartTimeInput.onchange = saveSleepModeSettings;
+        sleepEndTimeInput.onchange = saveSleepModeSettings;
+
+
+        // --- リアルタイムメッセージ機能 (Firebase Firestore) ---
+
+        function getCommentsCollectionPath() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `comments/${year}-${month}-${day}/messages`;
+        }
+
+        function subscribeToComments() {
+            if (!db) {
+                commentList.innerHTML = '<p class="text-red-500 text-center text-sm">データベースに接続できません。</p>';
+                return;
+            }
+            if (unsubscribeComments) {
+                unsubscribeComments();
+            }
+
+            const collectionPath = getCommentsCollectionPath();
+            unsubscribeComments = db.collection(collectionPath)
+                .orderBy("timestamp", "asc")
+                .onSnapshot(snapshot => {
+                    renderComments(snapshot.docs);
+                }, error => {
+                    console.error("メッセージの取得に失敗しました: ", error);
+                    showErrorMessage("メッセージのリアルタイム取得に失敗しました。");
+                });
+        }
+        
+        function renderComments(docs) {
+            commentList.innerHTML = '';
+            if (docs.length === 0) {
+                return;
+            }
+
+            docs.forEach(doc => {
+                const comment = doc.data();
+                const commentId = doc.id;
+
+                const li = document.createElement('div');
+                li.className = 'bg-gray-100 p-3 rounded-lg flex justify-between items-start space-x-4';
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'flex-grow min-w-0'; 
+
+                const textP = document.createElement('p');
+                textP.textContent = comment.text;
+                textP.className = 'text-red-600 text-3xl font-bold break-words';
+
+                const timeP = document.createElement('p');
+                const time = comment.timestamp ? comment.timestamp.toDate() : new Date();
+                timeP.textContent = time.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                timeP.className = 'text-xs text-gray-500 mt-1';
+                
+                contentDiv.appendChild(textP);
+                contentDiv.appendChild(timeP);
+                li.appendChild(contentDiv);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '×';
+                deleteButton.className = 'text-red-500 hover:text-red-700 font-bold text-xl flex-shrink-0';
+                deleteButton.onclick = () => deleteComment(commentId);
+                li.appendChild(deleteButton);
+                
+                commentList.appendChild(li);
+            });
+            commentList.scrollTop = commentList.scrollHeight;
+        }
+        
+        async function addComment() {
+            if (!db) return;
+            const text = commentInput.value.trim();
+            if (text === '') return;
+
+            try {
+                const collectionPath = getCommentsCollectionPath();
+                await db.collection(collectionPath).add({
+                    text: text,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                commentInput.value = '';
+            } catch (error) {
+                console.error("メッセージの追加に失敗しました: ", error);
+                showErrorMessage("メッセージの投稿に失敗しました。");
+            }
+        }
+
+        async function deleteComment(commentId) {
+            if (!confirm("この内容を削除しますか？")) return;
+
+            try {
+                const collectionPath = getCommentsCollectionPath();
+                await db.collection(collectionPath).doc(commentId).delete();
+            } catch (error) {
+                console.error("メッセージの削除に失敗しました: ", error);
+                showErrorMessage("メッセージの削除に失敗しました。");
+            }
+        }
+        
+        async function deleteAllComments() {
+            if (!db) {
+                showErrorMessage("データベースに接続されていません。");
+                return;
+            }
+            if (!confirm("本当にすべての伝言を削除しますか？\nこの操作は元に戻せません。")) return;
+
+            const collectionPath = getCommentsCollectionPath();
+            const collectionRef = db.collection(collectionPath);
+
+            try {
+                const snapshot = await collectionRef.get();
+                if (snapshot.empty) {
+                    return; 
+                }
+                
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                await batch.commit();
+            } catch (error) {
+                console.error("全メッセージの削除に失敗しました: ", error);
+                showErrorMessage("すべての伝言の削除に失敗しました。");
+            }
+        }
+
+        addCommentButton.onclick = addComment;
+        commentInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                addComment();
+            }
+        });
+        
+        deleteAllCommentsButton.onclick = deleteAllComments;
+        
+        function startSystemChecks() {
+            setInterval(() => {
+                const currentDate = new Date().getDate();
+                if (currentDate !== lastCheckedDate) {
+                    setupDate();
+                    subscribeToComments();
+                    if (gapi && gapi.client.getToken()) {
+                        listUpcomingEvents();
+                    }
+                }
+                checkSleepMode();
+            }, 60000); 
+        }
+
+        // --- 初期化処理 ---
+        window.onload = () => {
+            setupDate();
+            updateTime();
+            setInterval(updateTime, 1000);
+            startSystemChecks();
+            initializeApis();
+            loadSleepModeSettings();
+            checkSleepMode();
+            subscribeToComments();
+        };
+    </script>
+</body>
+</html>
